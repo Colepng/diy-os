@@ -1,6 +1,6 @@
+use core::fmt::{self, Write};
 use lazy_static::lazy_static;
 use spin::Mutex;
-use core::fmt::{Write, self};
 
 use volatile::Volatile;
 
@@ -106,12 +106,12 @@ impl Writer {
                 let char = self.buffer.chars[row][col].read();
                 self.buffer.chars[row - 1][col].write(char);
             }
-        } 
+        }
 
         self.clear_row(BUFFER_HEIGHT - 1);
         self.column_position = 0;
     }
-    
+
     fn clear_row(&mut self, row: usize) {
         let blank = ScreenChar {
             ascii_character: b' ',
@@ -144,5 +144,42 @@ macro_rules! println {
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-    WRITER.lock().write_fmt(args).unwrap();
+    use x86_64::instructions::interrupts;
+
+    // prevents deadlock by waiting for the lock on writer never being unlocked
+    interrupts::without_interrupts(|| {
+        WRITER.lock().write_fmt(args).unwrap();
+    });
+}
+
+// to check if any panics happen when printing
+#[test_case]
+fn test_println_simple() {
+    println!("test_println_simple output");
+}
+
+// to check if any panics when printing multiple lines
+#[test_case]
+fn test_println_many() {
+    for _ in 0..200 {
+        println!("test_println_many output");
+    }
+}
+
+// checks if the actual output is what we wanted
+#[test_case]
+fn test_println_output() {
+    use core::fmt::Write;
+    use x86_64::instructions::interrupts;
+
+    let s = "Some test string that fits on a single line";
+    // turns off interrupts so a dead lock can't occur
+    interrupts::without_interrupts(|| {
+        let mut writer = WRITER.lock();
+        writeln!(writer, "\n{}", s).expect("writeln failed");
+        for (i, c) in s.chars().enumerate() {
+            let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+            assert_eq!(char::from(screen_char.ascii_character), c);
+        }
+    });
 }
