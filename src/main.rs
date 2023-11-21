@@ -27,20 +27,6 @@ fn main(boot_info: &'static BootInfo) -> ! {
 
     allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("failed to setup heap");
 
-    // create a reference counted vector -> will be freed when count reaches 0
-    let reference_counted = Rc::new(vec![1, 2, 3]);
-    let cloned_reference = reference_counted.clone();
-    println!("current reference count is {}", Rc::strong_count(&cloned_reference));
-    core::mem::drop(reference_counted);
-    println!("reference count is {} now", Rc::strong_count(&cloned_reference));
-
-    // // create a dynamically sized vector
-    // let mut vec = Vec::new();
-    // for i in 0..500 {
-    //     vec.push(i);
-    // }
-    // println!("vec at {:?}", vec.as_slice());
-
     #[cfg(test)]
     test_main();
 
