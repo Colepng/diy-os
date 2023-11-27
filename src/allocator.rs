@@ -1,6 +1,7 @@
 use x86_64::{structures::paging::{FrameAllocator, Size4KiB, Mapper, Page, mapper::MapToError, PageTableFlags}, VirtAddr};
 
 use self::bump::BumpAllocator;
+use crate::spinlock::{Spinlock, SpinlockGuard};
 
 pub mod bump;
 
@@ -41,18 +42,18 @@ pub fn setup_heap(mapper: &mut impl Mapper<Size4KiB>, frame_allocator: &mut impl
 
 /// A wrapper around spin::Mutex to permit trait implementations.
 pub struct Locked<A> {
-    inner: spin::Mutex<A>,
+    inner: Spinlock<A>,
 }
 
 impl<A> Locked<A> {
     pub const fn new(inner: A) -> Self {
         Locked {
-            inner: spin::Mutex::new(inner),
+            inner: Spinlock::new(inner),
         }
     }
 
-    pub fn lock(&self) -> spin::MutexGuard<A> {
-        self.inner.lock()
+    pub fn lock(&self) -> SpinlockGuard<A> {
+        self.inner.acquire()
     }
 }
 

@@ -19,6 +19,7 @@ pub mod memory;
 pub mod serial;
 pub mod vga_driver;
 pub mod allocator;
+pub mod spinlock;
 
 pub trait Testable {
     fn run(&self) -> ();
@@ -87,7 +88,7 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 pub fn init() {
     gdt::init();
     interrupts::init_idt();
-    unsafe { interrupts::PICS.lock().initialize() };
+    unsafe { interrupts::PICS.acquire().initialize() };
     x86_64::instructions::interrupts::enable();
 }
 

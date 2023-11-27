@@ -1,12 +1,13 @@
 use lazy_static::lazy_static;
-use spin::Mutex;
 use uart_16550::SerialPort;
 
+use crate::spinlock::Spinlock;
+
 lazy_static! {
-    pub static ref SERIAL1: Mutex<SerialPort> = {
+    pub static ref SERIAL1: Spinlock<SerialPort> = {
         let mut serial_port = unsafe { SerialPort::new(0x3F8) };
         serial_port.init();
-        Mutex::new(serial_port)
+        Spinlock::new(serial_port)
     };
 }
 
@@ -18,7 +19,7 @@ pub fn _print(args: ::core::fmt::Arguments) {
     // prevents deadlock waiting for the lock
     interrupts::without_interrupts(|| {
         SERIAL1
-            .lock()
+            .acquire()
             .write_fmt(args)
             .expect("Printing to serial failed");
     });

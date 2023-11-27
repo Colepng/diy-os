@@ -1,11 +1,11 @@
 use core::fmt::{self, Write};
 use lazy_static::lazy_static;
-use spin::Mutex;
+use crate::spinlock::Spinlock;
 
 use volatile::Volatile;
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+    pub static ref WRITER: Spinlock<Writer> = Spinlock::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
@@ -144,12 +144,7 @@ macro_rules! println {
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-    use x86_64::instructions::interrupts;
-
-    // prevents deadlock by waiting for the lock on writer never being unlocked
-    interrupts::without_interrupts(|| {
-        WRITER.lock().write_fmt(args).unwrap();
-    });
+    WRITER.acquire().write_fmt(args).unwrap();
 }
 
 // to check if any panics happen when printing
@@ -174,12 +169,10 @@ fn test_println_output() {
 
     let s = "Some test string that fits on a single line";
     // turns off interrupts so a dead lock can't occur
-    interrupts::without_interrupts(|| {
-        let mut writer = WRITER.lock();
-        writeln!(writer, "\n{}", s).expect("writeln failed");
-        for (i, c) in s.chars().enumerate() {
-            let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
-            assert_eq!(char::from(screen_char.ascii_character), c);
-        }
-    });
+    let mut writer = WRITER.acquire();
+    writeln!(writer, "\n{}", s).expect("writeln failed");
+    for (i, c) in s.chars().enumerate() {
+        let screen_char = writer.buffer.chars[BUFFER_HEIGHT - 2][i].read();
+        assert_eq!(char::from(screen_char.ascii_character), c);
+    }
 }

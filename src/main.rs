@@ -8,9 +8,8 @@
 extern crate alloc;
 
 use core::panic::PanicInfo;
-use alloc::{boxed::Box, rc::Rc, vec};
 use bootloader::{BootInfo, entry_point};
-use diy_os::{init, println, hlt_loop, memory::{self, BootInfoFrameAllocator}, allocator};
+use diy_os::{init, println, hlt_loop, memory::BootInfoFrameAllocator, allocator};
 
 entry_point!(main);
 
