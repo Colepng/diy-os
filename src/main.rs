@@ -5,6 +5,19 @@
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#![warn(
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::perf,
+    clippy::style,
+)]
+
+#![deny(
+    clippy::suspicious,
+    clippy::correctness,
+    clippy::complexity,
+)]
+
 extern crate alloc;
 
 use core::panic::PanicInfo;
