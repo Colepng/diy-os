@@ -1,4 +1,8 @@
-use core::{alloc::{Layout, GlobalAlloc}, ptr::{self, NonNull}, mem};
+use core::{
+    alloc::{GlobalAlloc, Layout},
+    mem,
+    ptr::{self, NonNull},
+};
 
 use super::Locked;
 
@@ -30,8 +34,8 @@ impl FixedSizeBlockAllocator {
     pub const fn new() -> Self {
         const ARRAY_REPEAT_VALUE: Option<&'static mut ListNode> = None;
 
-        Self { 
-            list_heads: [ARRAY_REPEAT_VALUE; BLOCK_SIZES.len()], 
+        Self {
+            list_heads: [ARRAY_REPEAT_VALUE; BLOCK_SIZES.len()],
             fallback_allocator: linked_list_allocator::Heap::empty(),
         }
     }

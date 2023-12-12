@@ -1,6 +1,6 @@
+use crate::spinlock::Spinlock;
 use core::fmt::{self, Write};
 use lazy_static::lazy_static;
-use crate::spinlock::Spinlock;
 
 use volatile::Volatile;
 

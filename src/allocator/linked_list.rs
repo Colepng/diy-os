@@ -1,4 +1,4 @@
-use core::{mem, alloc::GlobalAlloc};
+use core::{alloc::GlobalAlloc, mem};
 
 use crate::allocator::align_up;
 
@@ -24,7 +24,7 @@ impl ListNode {
 }
 
 pub struct LinkedListAllocator {
-    head: ListNode
+    head: ListNode,
 }
 
 impl LinkedListAllocator {
@@ -65,9 +65,7 @@ impl LinkedListAllocator {
     /// it from the list.
     ///
     /// Returns a tuple of the list node and the start address of the allocation.
-    fn find_region(&mut self, size: usize, align: usize)
-        -> Option<(&'static mut ListNode, usize)>
-    {
+    fn find_region(&mut self, size: usize, align: usize) -> Option<(&'static mut ListNode, usize)> {
         // reference to current list node, updated for each iteration
         let mut current_region = &mut self.head;
 
@@ -95,9 +93,7 @@ impl LinkedListAllocator {
     /// alignment.
     ///
     /// Returns the allocation start address on success.
-    fn alloc_from_region(region: &ListNode, size: usize, align: usize)
-        -> Result<usize, ()>
-    {
+    fn alloc_from_region(region: &ListNode, size: usize, align: usize) -> Result<usize, ()> {
         let alloc_start = align_up(region.start_addr(), align);
         let alloc_end = alloc_start.checked_add(size).ok_or(())?;
 

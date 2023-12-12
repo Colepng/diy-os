@@ -15,9 +15,9 @@
 
 extern crate alloc;
 
+use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use bootloader::{BootInfo, entry_point};
-use diy_os::{init, println, hlt_loop, memory::BootInfoFrameAllocator, allocator};
+use diy_os::{allocator, hlt_loop, init, memory::BootInfoFrameAllocator, println};
 
 entry_point!(main);
 

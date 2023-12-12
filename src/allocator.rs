@@ -39,7 +39,9 @@ pub fn setup_heap(
     };
 
     for page in page_range {
-        let frame = frame_allocator.allocate_frame().ok_or(MapToError::FrameAllocationFailed)?;
+        let frame = frame_allocator
+            .allocate_frame()
+            .ok_or(MapToError::FrameAllocationFailed)?;
 
         let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 

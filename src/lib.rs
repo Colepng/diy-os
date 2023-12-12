@@ -23,13 +23,13 @@ extern crate alloc;
 #[cfg(test)]
 use bootloader::{entry_point, BootInfo};
 
+pub mod allocator;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
-pub mod vga_driver;
-pub mod allocator;
 pub mod spinlock;
+pub mod vga_driver;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
