@@ -4,18 +4,13 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
-
-#![warn(
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::perf,
-    clippy::style,
-)]
-
+#![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
     clippy::correctness,
     clippy::complexity,
+    clippy::missing_const_for_fn,
+    unsafe_op_in_unsafe_fn
 )]
 
 extern crate alloc;

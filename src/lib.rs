@@ -6,18 +6,15 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_mut_refs)]
 
-#![warn(
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::perf,
-    clippy::style,
-)]
-
+#![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
     clippy::correctness,
     clippy::complexity,
+    clippy::missing_const_for_fn,
+    unsafe_op_in_unsafe_fn
 )]
+#![allow(clippy::module_name_repetitions, clippy::must_use_candidate)]
 
 use core::panic::PanicInfo;
 
