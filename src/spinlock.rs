@@ -42,8 +42,8 @@ impl<T> Spinlock<T> {
     }
 
     pub fn release(&self) {
-        self.enable_interrupts();
         self.locked.store(false, Ordering::Release);
+        self.enable_interrupts();
     }
 }
 
