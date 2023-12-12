@@ -22,7 +22,7 @@ use diy_os::{init, println, hlt_loop, memory::BootInfoFrameAllocator, allocator}
 entry_point!(main);
 
 #[no_mangle]
-fn main(boot_info: &'static BootInfo) -> ! {
+extern "Rust" fn main(boot_info: &'static BootInfo) -> ! {
     use x86_64::VirtAddr;
 
     println!("hello world");

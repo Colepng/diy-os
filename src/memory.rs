@@ -1,4 +1,5 @@
 use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
+use x86_64::registers::control::Cr3;
 use x86_64::{
     structures::paging::{
         FrameAllocator, Mapper, OffsetPageTable, Page, PageTable, PageTableFlags, PhysFrame,
@@ -7,15 +8,21 @@ use x86_64::{
     PhysAddr, VirtAddr,
 };
 
+/// initalis a [`OffsetPageTable`] from a `physical_memory_offset`
+///
+/// # Safety
+/// The caller must guarantee that the `physical_memory_offset` is correct.
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
-    let level_4_table = active_level_4_table(physical_memory_offset);
+    unsafe {
+        let level_4_table = active_level_4_table(physical_memory_offset);
 
-    OffsetPageTable::new(level_4_table, physical_memory_offset)
+        OffsetPageTable::new(level_4_table, physical_memory_offset)
+    }
 }
 
+/// # Safety
+/// The caller must guarantee that the `physical_memory_offset` is correct.
 unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut PageTable {
-    use x86_64::registers::control::Cr3;
-
     let (level_4_table_frame, _) = Cr3::read();
 
     let physical_start_address = level_4_table_frame.start_address();
@@ -23,7 +30,9 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
 
     let page_table_ptr: *mut PageTable = virt_start_adress.as_mut_ptr();
 
-    &mut *page_table_ptr
+    // SAFETY: Deference of raw pointer which is correct as long as the `physical_memory_offset` is
+    // correct
+    unsafe { &mut *page_table_ptr }
 }
 
 pub fn create_example_mapping(
@@ -47,13 +56,15 @@ pub struct BootInfoFrameAllocator {
 }
 
 impl BootInfoFrameAllocator {
-    /// Create a FrameAllocator from the passed memory map.
+    /// Create a [`FrameAllocator`] from the passed memory map.
     ///
+    /// # Safety
     /// This function is unsafe because the caller must guarantee that the passed
     /// memory map is valid. The main requirement is that all frames that are marked
     /// as `USABLE` in it are really unused.
-    pub unsafe fn init(memory_map: &'static MemoryMap) -> Self {
-        BootInfoFrameAllocator {
+    #[must_use]
+    pub const unsafe fn init(memory_map: &'static MemoryMap) -> Self {
+        Self {
             memory_map,
             next: 0,
         }

@@ -32,6 +32,7 @@ pub mod allocator;
 pub mod spinlock;
 
 pub trait Testable {
+    #[allow(clippy::unused_unit)]
     fn run(&self) -> ();
 }
 
