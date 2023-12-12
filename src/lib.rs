@@ -5,7 +5,7 @@
 #![reexport_test_harness_main = "test_harness_main"]
 #![feature(abi_x86_interrupt)]
 #![feature(const_mut_refs)]
-
+#![feature(negative_impls)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,

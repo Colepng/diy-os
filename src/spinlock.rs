@@ -46,16 +46,17 @@ impl<T> Spinlock<T> {
         self.enable_interrupts();
     }
 }
-
-unsafe impl<T> Sync for Spinlock<T> {}
-unsafe impl<T> Send for Spinlock<T> {}
+// these are the only places where `T: Send` matters; all other
+// functionality works fine on a single thread.
+unsafe impl<T: ?Sized + Send> Send for Spinlock<T> {}
+unsafe impl<T: ?Sized + Send> Sync for Spinlock<T> {}
 
 pub struct SpinlockGuard<'a, T> {
     spinlock: &'a Spinlock<T>
 }
 
-unsafe impl<T> Sync for SpinlockGuard<'_, T> {}
-unsafe impl<T> Send for SpinlockGuard<'_, T> {}
+unsafe impl<T: ?Sized + Sync> Sync for SpinlockGuard<'_, T> {}
+impl<T: ?Sized> !Send for SpinlockGuard<'_, T> {}
 
 impl<T> Drop for SpinlockGuard<'_, T> {
     #[inline]
