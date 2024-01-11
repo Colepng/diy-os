@@ -33,8 +33,6 @@ pub mod memory;
 pub mod serial;
 pub mod spinlock;
 
-pub use framebuffer::vga_driver;
-
 pub trait Testable {
     #[allow(clippy::unused_unit)]
     fn run(&self) -> ();
