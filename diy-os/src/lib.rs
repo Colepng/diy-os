@@ -14,7 +14,11 @@
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::module_name_repetitions, clippy::must_use_candidate)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::explicit_deref_methods
+)]
 
 use core::panic::PanicInfo;
 
@@ -32,6 +36,7 @@ pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod spinlock;
+pub mod console;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]

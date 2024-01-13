@@ -4,6 +4,9 @@ use core::ops::DerefMut;
 use crate::framebuffer::FRAME_BUFER;
 use crate::serial::_print as _print_serial;
 
+pub mod font;
+pub mod graphics;
+
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     if let Some(frame_buffer) = FRAME_BUFER.acquire().deref_mut() {
