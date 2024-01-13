@@ -45,7 +45,6 @@ impl FrameBuffer {
             y: 0,
         }
     }
-
 }
 
 impl GraphicBackend for FrameBuffer {
@@ -150,7 +149,7 @@ impl TextDrawer for FrameBuffer {
 
 impl Write for FrameBuffer {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.draw_str(s, Color::new(255, 255, 255));
+        self.draw_str(s, Color::WHITE);
         Ok(())
     }
 }

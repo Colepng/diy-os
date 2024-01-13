@@ -10,6 +10,18 @@ pub struct Color {
 }
 
 impl Color {
+    pub const WHITE: Self = Self {
+        red: 255,
+        green: 255,
+        blue: 255,
+    };
+
+    pub const BLACK: Self = Self {
+        red: 0,
+        green: 0,
+        blue: 0,
+    };
+
     pub const fn new(red: u8, green: u8, blue: u8) -> Self {
         Self { red, green, blue }
     }
@@ -36,7 +48,7 @@ pub trait GraphicBackend {
     fn fill(&mut self, color: Color);
 
     fn clear(&mut self) {
-        self.fill(Color::new(0, 0, 0));
+        self.fill(Color::BLACK);
     }
 
     fn get_x(&self) -> usize;
