@@ -274,6 +274,7 @@ dependencies = [
  "bootloader_api",
  "lazy_static",
  "linked_list_allocator",
+ "noto-sans-mono-bitmap",
  "pc-keyboard",
  "pic8259",
  "uart_16550",
@@ -619,6 +620,12 @@ name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+
+[[package]]
+name = "noto-sans-mono-bitmap"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a27daf9557165efe1d09b52f97393bf6283cadb0a76fbe64a1061e15553a994a"
 
 [[package]]
 name = "os"

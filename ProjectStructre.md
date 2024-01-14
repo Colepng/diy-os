@@ -1,0 +1,7 @@
+- Root
+    - Devices
+        - Graphic generic graphic api
+            - Frame Buffer - public api for the uefi frame buffer
+    - Console generic api for a console with both graphic and serial impl
+        - Frame Buffer console
+        - uart16650 console
