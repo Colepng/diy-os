@@ -30,10 +30,12 @@ pub fn init_helper(boot_info: &'static mut BootInfo) {
 }
 
 pub struct FrameBuffer {
-    info: FrameBufferInfo,
+    info: FrameBufferInfo,    // Info about the frame buffer
     memio: &'static mut [u8], // the underlying memory mapped IO
     x: usize,                 // Current pixel in the x axis
     y: usize,                 // Current pixel in the y axis
+    write_pixel_fn: fn(&mut FrameBuffer, usize, Color), // Function pointer to the function that
+                              // writes the appropriate pixel format
 }
 
 impl FrameBuffer {
@@ -43,6 +45,50 @@ impl FrameBuffer {
             memio,
             x: 0,
             y: 0,
+            write_pixel_fn: match info.pixel_format {
+                PixelFormat::Bgr => Self::write_bgr_pixel,
+                PixelFormat::Rgb => Self::write_rgb_pixel,
+                PixelFormat::Unknown { .. } => Self::write_unknown_4byte_pixel,
+                _ => todo!(),
+            },
+        }
+    }
+
+    fn write_bgr_pixel(&mut self, byte_offset: usize, color: Color) {
+        self.memio[byte_offset] = color.blue;
+        self.memio[byte_offset + 1] = color.green;
+        self.memio[byte_offset + 2] = color.red;
+    }
+
+    fn write_rgb_pixel(&mut self, byte_offset: usize, color: Color) {
+        self.memio[byte_offset] = color.blue;
+        self.memio[byte_offset + 1] = color.green;
+        self.memio[byte_offset + 2] = color.red;
+    }
+
+    fn write_unknown_4byte_pixel(&mut self, byte_offset: usize, color: Color) {
+        if let PixelFormat::Unknown {
+            red_position,
+            green_position,
+            blue_position,
+        } = self.info.pixel_format
+        {
+            let buffer_ptr = self.memio.as_mut_ptr();
+
+            let color_u32 = (u32::from(color.red) << red_position)
+                | (u32::from(color.blue) << blue_position)
+                | (u32::from(color.green) << green_position);
+
+            // SAFETY: Assuming x and y are not larger then the screen size byte_offset should
+            // never be larger then the number of available bytes
+            let pixel_ptr = unsafe { buffer_ptr.byte_add(byte_offset) };
+
+            #[allow(clippy::cast_ptr_alignment)]
+            // SAFETY: The pointer is aligned to a 4 byte boundary since there is 4
+            // bytes per pixel
+            unsafe {
+                *pixel_ptr.cast::<u32>() = color_u32;
+            }
         }
     }
 }
@@ -51,34 +97,7 @@ impl GraphicBackend for FrameBuffer {
     fn plot_pixel(&mut self, x: usize, y: usize, color: Color) {
         let byte_offset = self.info.bytes_per_pixel * (y * self.info.stride + x);
 
-        match self.info.pixel_format {
-            PixelFormat::Bgr => {
-                self.memio[byte_offset] = color.blue;
-                self.memio[byte_offset + 1] = color.green;
-                self.memio[byte_offset + 2] = color.red;
-            }
-            PixelFormat::Rgb => {
-                self.memio[byte_offset] = color.red;
-                self.memio[byte_offset + 1] = color.green;
-                self.memio[byte_offset + 2] = color.blue;
-            }
-            PixelFormat::Unknown {
-                red_position,
-                green_position,
-                blue_position,
-            } => {
-                let buffer_ptr = self.memio.as_mut_ptr();
-
-                let color_u32 = (u32::from(color.red) << red_position)
-                    | (u32::from(color.blue) << blue_position)
-                    | (u32::from(color.green) << green_position);
-
-                unsafe {
-                    *(buffer_ptr.byte_add(byte_offset).cast::<u32>()) = color_u32;
-                }
-            }
-            _ => todo!(),
-        }
+        (self.write_pixel_fn)(self, byte_offset, color);
     }
 
     // TODO: Write an effient implemation that does not recalc
