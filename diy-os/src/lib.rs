@@ -21,8 +21,6 @@
 )]
 
 use core::panic::PanicInfo;
-
-#[cfg(test)]
 use bootloader_api::BootInfo;
 
 #[cfg(test)]
@@ -30,13 +28,13 @@ use bootloader_api::entry_point;
 extern crate alloc;
 
 pub mod allocator;
+pub mod console;
 pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod spinlock;
-pub mod console;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
@@ -75,8 +73,8 @@ entry_point!(test_main);
 /// Entry point for `cargo test`
 #[cfg(test)]
 #[no_mangle]
-fn test_main(boot_info: &'static BootInfo) -> ! {
-    init();
+fn test_main(boot_info: &'static mut BootInfo) -> ! {
+    init(boot_info);
     test_harness_main();
     hlt_loop();
 }
@@ -103,11 +101,8 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
     }
 }
 
-pub fn init() {
-    gdt::init();
-    interrupts::init_idt();
-    unsafe { interrupts::PICS.acquire().initialize() };
-    x86_64::instructions::interrupts::enable();
+pub fn init(boot_info: &'static mut BootInfo) {
+    framebuffer::init_helper(boot_info);
 }
 
 pub fn hlt_loop() -> ! {

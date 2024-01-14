@@ -23,11 +23,10 @@ entry_point!(main);
 
 #[no_mangle]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> ! {
-    use x86_64::VirtAddr;
-    
-    // println!("hello world");
-    // init();
-    //
+    init(boot_info);
+
+    println!("Hello, world!");
+
     // let physicals_mem_offset =
     //     VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
     // let mut mapper = unsafe { diy_os::memory::init(physicals_mem_offset) };
