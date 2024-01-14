@@ -146,20 +146,24 @@ impl TextDrawer for FrameBuffer {
     }
 
     fn scroll(&mut self, amount: Pixels) {
-        let number_of_bytes_to_copy = self.info.bytes_per_pixel * self.info.stride * amount.0;
+        let number_of_bytes_to_scroll = self.info.bytes_per_pixel * self.info.stride * amount.0;
 
-        // copys amount number of pixels up
-        (number_of_bytes_to_copy..self.memio.len())
-            .enumerate()
-            .for_each(|(counter, i)| {
-                self.memio[counter] = self.memio[i];
-            });
+        let memio_ptr = self.memio.as_mut_ptr();
+
+        // shifts up everything but the last amount of pixels
+        unsafe {
+            core::ptr::copy(
+                memio_ptr.byte_add(number_of_bytes_to_scroll),
+                memio_ptr,
+                self.info.byte_len - number_of_bytes_to_scroll,
+            );
+        }
 
         // sets each pixel to black to clear the old pixels
         self.memio
             .iter_mut()
             .rev()
-            .take(number_of_bytes_to_copy)
+            .take(number_of_bytes_to_scroll)
             .for_each(|byte| {
                 *byte = 0;
             });
