@@ -15,14 +15,28 @@
 
 extern crate alloc;
 
-use bootloader_api::{entry_point, BootInfo};
+use bootloader_api::{
+    config::{Mapping, Mappings},
+    entry_point, BootInfo, BootloaderConfig,
+};
 use core::panic::PanicInfo;
 use diy_os::{allocator, hlt_loop, init, memory::BootInfoFrameAllocator, println};
 
-entry_point!(main);
+static BOOTLOADER_CONFIG: BootloaderConfig = {
+    let mut config = BootloaderConfig::new_default();
+    let mut mappings = Mappings::new_default();
+    mappings.physical_memory = Some(Mapping::Dynamic);
+    config.mappings = mappings;
+
+    config
+};
+
+entry_point!(main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> ! {
+    let offset = boot_info.physical_memory_offset.into_option().unwrap();
+
     init(boot_info);
 
     println!("Hello, world!");
