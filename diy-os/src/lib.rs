@@ -103,6 +103,8 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 
 pub fn init(boot_info: &'static mut BootInfo) {
     framebuffer::init_helper(boot_info);
+    gdt::init();
+    interrupts::init_idt();
 }
 
 pub fn hlt_loop() -> ! {
