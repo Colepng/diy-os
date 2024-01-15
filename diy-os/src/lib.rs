@@ -6,6 +6,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_mut_refs)]
 #![feature(negative_impls)]
+#![feature(exposed_provenance)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
@@ -27,6 +28,7 @@ use bootloader_api::BootInfo;
 use bootloader_api::entry_point;
 extern crate alloc;
 
+pub mod acpi;
 pub mod allocator;
 pub mod console;
 pub mod framebuffer;
