@@ -21,8 +21,8 @@ lazy_static! {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-            // idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
-            // idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
+            idt[InterruptIndex::Timer.as_usize()].set_handler_fn(timer_interrupt_handler);
+            idt[InterruptIndex::Keyboard.as_usize()].set_handler_fn(keyboard_interrupt_handler);
         }
         idt
     };
@@ -30,6 +30,10 @@ lazy_static! {
 
 pub fn init_idt() {
     IDT.load();
+}
+
+pub fn unmask() {
+    unsafe { PICS.acquire().write_masks(0b1111_1100, 0b1111_1111) };
 }
 
 extern "x86-interrupt" fn general_protection_handler(
@@ -57,8 +61,6 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    print!(".");
-
     unsafe {
         PICS.acquire()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
@@ -66,28 +68,6 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
-    use x86_64::instructions::port::Port;
-
-    lazy_static! {
-        static ref KEYBOARD: Spinlock<Keyboard<layouts::Us104Key, ScancodeSet1>> = Spinlock::new(
-            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
-        );
-    }
-
-    let mut port = Port::new(PS2_CONTROLLER_DATA_PORT);
-    let mut keyboard = KEYBOARD.acquire();
-
-    let scancode: u8 = unsafe { port.read() };
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
-    }
-
     unsafe {
         PICS.acquire()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());

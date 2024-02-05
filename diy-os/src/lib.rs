@@ -105,6 +105,9 @@ pub fn init(boot_info: &'static mut BootInfo) {
     framebuffer::init_helper(boot_info);
     gdt::init();
     interrupts::init_idt();
+    unsafe { interrupts::PICS.acquire().initialize() };
+    interrupts::unmask();
+    x86_64::instructions::interrupts::enable();
 }
 
 pub fn hlt_loop() -> ! {

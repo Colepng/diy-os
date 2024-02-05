@@ -35,22 +35,10 @@ entry_point!(main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> ! {
-    let offset = boot_info.physical_memory_offset.into_option().unwrap();
-
     init(boot_info);
 
     println!("Hello, world!");
 
-    // let physicals_mem_offset =
-    //     VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
-    // let mut mapper = unsafe { diy_os::memory::init(physicals_mem_offset) };
-    // let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-    //
-    // allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("failed to setup heap");
-    //
-    // #[cfg(test)]
-    // test_main();
-    //
     hlt_loop();
 }
 
