@@ -14,22 +14,27 @@
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::module_name_repetitions, clippy::must_use_candidate)]
+#![allow(
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::explicit_deref_methods
+)]
 
 use core::panic::PanicInfo;
-
-extern crate alloc;
+use bootloader_api::BootInfo;
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader_api::entry_point;
+extern crate alloc;
 
 pub mod allocator;
+pub mod console;
+pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod spinlock;
-pub mod vga_driver;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
@@ -68,8 +73,8 @@ entry_point!(test_main);
 /// Entry point for `cargo test`
 #[cfg(test)]
 #[no_mangle]
-fn test_main(boot_info: &'static BootInfo) -> ! {
-    init();
+fn test_main(boot_info: &'static mut BootInfo) -> ! {
+    init(boot_info);
     test_harness_main();
     hlt_loop();
 }
@@ -96,10 +101,12 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
     }
 }
 
-pub fn init() {
+pub fn init(boot_info: &'static mut BootInfo) {
+    framebuffer::init_helper(boot_info);
     gdt::init();
     interrupts::init_idt();
     unsafe { interrupts::PICS.acquire().initialize() };
+    interrupts::unmask();
     x86_64::instructions::interrupts::enable();
 }
 
