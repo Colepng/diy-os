@@ -6,6 +6,9 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_mut_refs)]
 #![feature(negative_impls)]
+#![feature(ascii_char)]
+#![feature(ascii_char_variants)]
+#![feature(anonymous_lifetime_in_impl_trait)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
