@@ -64,30 +64,32 @@ pub trait TextDrawer: GraphicBackend {
     fn scroll(&mut self, amount: Pixels);
 
     fn draw_char(&mut self, char: char, color: Color) {
-        let raster_char =
-            get_raster(char, STYLE, SIZE).unwrap_or_else(|| get_raster(' ', STYLE, SIZE).unwrap());
+        if char != '\0' {
+            let raster_char =
+                get_raster(char, STYLE, SIZE).unwrap_or_else(|| get_raster(' ', STYLE, SIZE).unwrap());
 
-        let mut new_x_pos: usize = self.get_x() + WIDTH;
+            let mut new_x_pos: usize = self.get_x() + WIDTH;
 
-        if new_x_pos > self.get_width() {
-            self.new_line();
-            new_x_pos = WIDTH;
-        }
+            if new_x_pos > self.get_width() {
+                self.new_line();
+                new_x_pos = WIDTH;
+            }
 
-        if char == '\n' {
-            self.new_line();
-        } else {
-            for (y, row) in raster_char.raster().iter().enumerate() {
-                for (x, &byte) in row.iter().enumerate() {
-                    if byte != 0 {
-                        let mut pixel_color = color;
-                        pixel_color.scale(byte);
+            if char == '\n' {
+                self.new_line();
+            } else {
+                for (y, row) in raster_char.raster().iter().enumerate() {
+                    for (x, &byte) in row.iter().enumerate() {
+                        if byte != 0 {
+                            let mut pixel_color = color;
+                            pixel_color.scale(byte);
 
-                        self.plot_pixel(self.get_x() + x, self.get_y() + y, pixel_color);
+                            self.plot_pixel(self.get_x() + x, self.get_y() + y, pixel_color);
+                        }
                     }
                 }
+                self.set_x(new_x_pos);
             }
-            self.set_x(new_x_pos);
         }
     }
 
