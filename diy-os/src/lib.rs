@@ -105,12 +105,22 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
 }
 
 pub fn init(boot_info: &'static mut BootInfo) {
+    println!("Entering init");
+
     framebuffer::init_helper(boot_info);
+    println!("Framebuffer Initialized");
+
     gdt::init();
+    println!("GDT Initialized");
+
     interrupts::init_idt();
+    println!("IDT Initialized");
     unsafe { interrupts::PICS.acquire().initialize() };
+    println!("PICS Initialized");
     interrupts::unmask();
+    println!("Interrupts Unmasked");
     x86_64::instructions::interrupts::enable();
+    println!("Interrupts Enabled");
 }
 
 pub fn hlt_loop() -> ! {
