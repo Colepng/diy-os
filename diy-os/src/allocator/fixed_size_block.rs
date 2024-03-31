@@ -69,7 +69,7 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
             Some(index) => {
                 if let Some(node) = allocator.list_heads[index].take() {
                     allocator.list_heads[index] = node.next.take();
-                    (node as *mut ListNode).cast::<u8>()
+                    ptr::from_mut::<ListNode>(node).cast::<u8>()
                 } else {
                     // no block exists in list => allocate new block
                     let block_size = BLOCK_SIZES[index];
@@ -111,5 +111,11 @@ unsafe impl GlobalAlloc for Locked<FixedSizeBlockAllocator> {
                 allocator.fallback_allocator.deallocate(ptr, layout);
             }
         }
+    }
+}
+
+impl Default for FixedSizeBlockAllocator {
+    fn default() -> Self {
+        Self::new()
     }
 }

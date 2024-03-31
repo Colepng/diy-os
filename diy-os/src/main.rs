@@ -20,7 +20,7 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
-use diy_os::{allocator, hlt_loop, init, memory::BootInfoFrameAllocator, println};
+use diy_os::{hlt_loop, init, println};
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();

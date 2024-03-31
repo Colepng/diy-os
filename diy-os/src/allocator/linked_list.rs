@@ -1,4 +1,4 @@
-use core::{alloc::GlobalAlloc, mem};
+use core::{alloc::GlobalAlloc, mem, ptr};
 
 use crate::allocator::align_up;
 
@@ -15,7 +15,7 @@ impl ListNode {
     }
 
     fn start_addr(&self) -> usize {
-        self as *const Self as usize
+       ptr::from_ref::<Self>(self) as usize
     }
 
     fn end_addr(&self) -> usize {
@@ -156,5 +156,11 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
         unsafe {
             self.lock().add_free_region(ptr as usize, size);
         }
+    }
+}
+
+impl Default for LinkedListAllocator {
+    fn default() -> Self {
+        Self::new()
     }
 }

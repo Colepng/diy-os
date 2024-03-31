@@ -1,4 +1,4 @@
-use noto_sans_mono_bitmap::{self, FontWeight, RasterHeight, RasterizedChar};
+use noto_sans_mono_bitmap::{FontWeight, RasterHeight, RasterizedChar};
 
 pub const STYLE: FontWeight = FontWeight::Regular;
 pub const SIZE: RasterHeight = RasterHeight::Size16;

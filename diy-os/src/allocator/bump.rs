@@ -62,3 +62,9 @@ unsafe impl GlobalAlloc for Locked<BumpAllocator> {
         }
     }
 }
+
+impl Default for BumpAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
