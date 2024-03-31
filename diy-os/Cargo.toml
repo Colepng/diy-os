@@ -13,7 +13,7 @@ pc-keyboard = "0.5.0"
 pic8259 = "0.10.4"
 uart_16550 = "0.3.0"
 volatile = "0.2.6"
-x86_64 = "0.14.11"
+x86_64 = "0.15.1"
 noto-sans-mono-bitmap = "0.2.0"
 
 # [profile.dev]
