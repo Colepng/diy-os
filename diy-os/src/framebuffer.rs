@@ -7,26 +7,18 @@ use crate::{
 };
 use core::{fmt::Write, usize};
 
-use bootloader_api::{
-    info::{FrameBufferInfo, PixelFormat},
-    BootInfo,
-};
+use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 
 use crate::console::graphics::Color;
 
 pub static FRAME_BUFER: Spinlock<Option<FrameBuffer>> = Spinlock::new(None);
 
-pub fn init(mem: &'static mut [u8], info: bootloader_api::info::FrameBufferInfo) {
+pub fn init(framebuffer_bootinfo: bootloader_api::info::FrameBuffer) {
+    let info = framebuffer_bootinfo.info();
+    let mem = framebuffer_bootinfo.into_buffer();
     let mut framebuffer = FrameBuffer::new(info, mem);
     framebuffer.clear();
     FRAME_BUFER.acquire().replace(framebuffer);
-}
-
-pub fn init_helper(boot_info: &'static mut BootInfo) {
-    if let Some(framebuffer_field) = boot_info.framebuffer.as_mut() {
-        let info = framebuffer_field.info();
-        init(framebuffer_field.buffer_mut(), info);
-    }
 }
 
 pub struct FrameBuffer {

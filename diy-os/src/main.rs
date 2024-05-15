@@ -20,7 +20,11 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
-use diy_os::{hlt_loop, init, println};
+use diy_os::{
+    allocator, hlt_loop, init,
+    memory::{self, BootInfoFrameAllocator},
+    println,
+};
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -34,8 +38,16 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(main, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
-extern "Rust" fn main(boot_info: &'static mut BootInfo) -> ! {
-    init(boot_info);
+extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
+    boot_info = init(boot_info);
+
+    let offset_addr =
+        x86_64::VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
+
+    // setup the heap
+    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
+    let mut mapper = unsafe { memory::init(offset_addr) };
+    allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("Failed to setup heap fuck u");
 
     println!("Hello, world!");
 

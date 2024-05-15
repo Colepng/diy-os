@@ -23,8 +23,8 @@
     clippy::explicit_deref_methods
 )]
 
-use core::panic::PanicInfo;
 use bootloader_api::BootInfo;
+use core::panic::PanicInfo;
 
 #[cfg(test)]
 use bootloader_api::entry_point;
@@ -104,11 +104,13 @@ pub fn exit_qemu(exit_code: QemuExitCode) {
     }
 }
 
-pub fn init(boot_info: &'static mut BootInfo) {
+pub fn init(boot_info: &'static mut BootInfo) -> &'static mut BootInfo {
     println!("Entering init");
 
-    framebuffer::init_helper(boot_info);
-    println!("Framebuffer Initialized");
+    if let Some(framebuffer) = boot_info.framebuffer.take() {
+        framebuffer::init(framebuffer);
+        println!("Framebuffer Initialized");
+    }
 
     gdt::init();
     println!("GDT Initialized");
@@ -121,6 +123,8 @@ pub fn init(boot_info: &'static mut BootInfo) {
     println!("Interrupts Unmasked");
     x86_64::instructions::interrupts::enable();
     println!("Interrupts Enabled");
+
+    boot_info
 }
 
 pub fn hlt_loop() -> ! {
