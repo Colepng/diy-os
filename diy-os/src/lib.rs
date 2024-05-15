@@ -38,6 +38,8 @@ pub mod interrupts;
 pub mod memory;
 pub mod serial;
 pub mod spinlock;
+pub mod elf;
+pub mod filesystem;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
