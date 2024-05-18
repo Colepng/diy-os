@@ -36,6 +36,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod pit;
 pub mod serial;
 pub mod spinlock;
 
