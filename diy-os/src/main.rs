@@ -102,11 +102,11 @@ pub fn set_count(pit: &mut Pit, count: u16) -> &mut Pit {
 
 // time in ms
 pub fn sleep(count: u64) {
-    x86_64::instructions::interrupts::without_interrupts(|| unsafe {
-        pit::counter = count;
-    });
-
-    while x86_64::instructions::interrupts::without_interrupts(|| unsafe { pit::counter }) > 0 {
+    *pit::SLEEP_COUNTER.acquire() = count;
+    pit::SLEEP_COUNTER.release();
+    
+    while *pit::SLEEP_COUNTER.acquire() > 0 {
+        pit::SLEEP_COUNTER.release();
         hlt();
     }
 }

@@ -59,11 +59,8 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    unsafe {
-        if pit::counter > 0 {
-            pit::counter -= 1
-        }
-    };
+    let mut counter = pit::SLEEP_COUNTER.acquire();
+    *counter = (*counter).saturating_sub(1);
 
     unsafe {
         PICS.acquire()

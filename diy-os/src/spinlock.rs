@@ -22,6 +22,7 @@ impl<T> Spinlock<T> {
 }
 
 impl<T: ?Sized> Spinlock<T> {
+    /// Acquires a lock and disables interrupts.
     pub fn acquire(&self) -> SpinlockGuard<'_, T> {
         self.disable_interrupts();
         // loops until not locked
@@ -50,6 +51,7 @@ impl<T: ?Sized> Spinlock<T> {
         x86_64::instructions::interrupts::disable();
     }
 
+    /// Release the lock and enable interrupts.
     pub fn release(&self) {
         self.locked.store(false, Ordering::Release);
         self.enable_interrupts();
