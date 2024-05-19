@@ -2,6 +2,10 @@ use x86_64::instructions::port::{Port, PortWriteOnly};
 
 use crate::spinlock::Spinlock;
 
+/// Lets all agree to never touch this in anything but the main cpu thread
+static mut PIT_TAKEN: bool = false;
+
+/// Sleep counter
 pub static SLEEP_COUNTER: Spinlock<u64> = Spinlock::new(0);
 
 pub struct Pit {
@@ -12,13 +16,25 @@ pub struct Pit {
 }
 
 impl Pit {
-    pub const fn new() -> Self {
+    const fn new() -> Self {
         Self {
             channel_0_port: ChannelPort(Port::new(0x40)),
             channel_1_port: ChannelPort(Port::new(0x41)),
             channel_2_port: ChannelPort(Port::new(0x42)),
             mode_port: CommandRegister::new(),
         }
+    }
+
+    pub const fn take() -> Option<Self> {
+        if unsafe { !PIT_TAKEN } {
+            Some(Self::new())
+        } else {
+            None
+        }
+    }
+
+    pub const fn give_back(_pit: Pit) {
+        unsafe { PIT_TAKEN = false }
     }
 }
 
@@ -352,4 +368,18 @@ impl From<BcdBinaryMode> for u8 {
     fn from(value: BcdBinaryMode) -> Self {
         value.to_u8()
     }
+}
+
+pub fn get_reload_value_from_frequency(frequency: u32) -> u16 {
+    u16::try_from(1192182 / frequency).unwrap()
+}
+
+pub fn set_count(pit: &mut Pit, count: u16) -> &mut Pit {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        pit.channel_0_port.write((count & 0xFF).try_into().unwrap()); // low_byte
+        pit.channel_0_port
+            .write(((count & 0xFF00) >> 8).try_into().unwrap()) // high byte
+    });
+
+    pit
 }
