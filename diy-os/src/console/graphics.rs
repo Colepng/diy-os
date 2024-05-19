@@ -65,8 +65,8 @@ pub trait TextDrawer: GraphicBackend {
 
     fn draw_char(&mut self, char: char, color: Color) {
         if char != '\0' {
-            let raster_char =
-                get_raster(char, STYLE, SIZE).unwrap_or_else(|| get_raster(' ', STYLE, SIZE).unwrap());
+            let raster_char = get_raster(char, STYLE, SIZE)
+                .unwrap_or_else(|| get_raster(' ', STYLE, SIZE).unwrap());
 
             let mut new_x_pos: usize = self.get_x() + WIDTH;
 

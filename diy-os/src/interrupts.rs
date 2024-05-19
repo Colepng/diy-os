@@ -14,7 +14,8 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
-        idt.general_protection_fault.set_handler_fn(general_protection_handler);
+        idt.general_protection_fault
+            .set_handler_fn(general_protection_handler);
         unsafe {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)

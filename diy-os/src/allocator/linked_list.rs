@@ -15,7 +15,7 @@ impl ListNode {
     }
 
     fn start_addr(&self) -> usize {
-       ptr::from_ref::<Self>(self) as usize
+        ptr::from_ref::<Self>(self) as usize
     }
 
     fn end_addr(&self) -> usize {
@@ -40,24 +40,29 @@ impl LinkedListAllocator {
     /// This function is unsafe because the caller must guarantee that the given
     /// heap bounds are valid and that the heap is unused. This method must be
     /// called only once.
-    pub unsafe fn init(&mut self, heap_start: usize, heap_size: usize) {
+    pub unsafe fn init(&mut self, heap_start: *mut u8, heap_size: usize) {
         unsafe {
             self.add_free_region(heap_start, heap_size);
         }
     }
 
     /// Adds the given memory region to the front of the list.
-    unsafe fn add_free_region(&mut self, addr: usize, size: usize) {
+    // Currently all the parts of strict provenance are being passed in but not as a pointer.
+    unsafe fn add_free_region(&mut self, free_region_ptr: *mut u8, size: usize) {
+        let addr = free_region_ptr.addr();
+
         assert_eq!(align_up(addr, mem::align_of::<ListNode>()), addr);
         assert!(size >= mem::align_of::<ListNode>());
 
         // create a new list node and append it at the start of the list
         let mut node = ListNode::new(size);
         node.next = self.head.next.take();
-        let node_ptr = addr as *mut ListNode;
+        // Allowed because we check alignment above
+        #[allow(clippy::cast_ptr_alignment)]
+        let node_ptr = free_region_ptr.with_addr(addr).cast::<ListNode>();
         unsafe {
             node_ptr.write(node);
-            self.head.next = Some(&mut *node_ptr);
+            self.head.next = node_ptr.as_mut();
         }
     }
 
@@ -139,11 +144,12 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
 
             if excess_size > 0 {
                 unsafe {
-                    allocator.add_free_region(alloc_end, excess_size);
+                    allocator
+                        .add_free_region(ptr::with_exposed_provenance_mut(alloc_end), excess_size);
                 }
             }
 
-            alloc_start as *mut u8
+            ptr::with_exposed_provenance_mut(alloc_start)
         } else {
             core::ptr::null_mut()
         }
@@ -154,7 +160,7 @@ unsafe impl GlobalAlloc for Locked<LinkedListAllocator> {
         let (size, _) = LinkedListAllocator::size_align(layout);
 
         unsafe {
-            self.lock().add_free_region(ptr as usize, size);
+            self.lock().add_free_region(ptr, size);
         }
     }
 }

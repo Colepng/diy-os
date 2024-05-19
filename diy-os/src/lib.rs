@@ -10,18 +10,22 @@
 #![feature(ascii_char_variants)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(const_refs_to_static)]
+#![feature(strict_provenance)]
+#![feature(exposed_provenance)]
+#![feature(layout_for_ptr)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
     clippy::correctness,
     clippy::complexity,
     clippy::missing_const_for_fn,
-    unsafe_op_in_unsafe_fn
+    unsafe_op_in_unsafe_fn,
+    fuzzy_provenance_casts
 )]
 #![allow(
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
-    clippy::explicit_deref_methods
+    clippy::explicit_deref_methods,
 )]
 
 use bootloader_api::BootInfo;
