@@ -23,7 +23,7 @@ use core::panic::PanicInfo;
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
-    println,
+    println, timer,
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -50,6 +50,12 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("Failed to setup heap fuck u");
 
     println!("Hello, world!");
+
+    println!("going to sleep");
+
+    timer::sleep(1000);
+
+    println!("wakign up");
 
     hlt_loop();
 }

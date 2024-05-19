@@ -41,8 +41,10 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod pit;
 pub mod serial;
 pub mod spinlock;
+pub mod timer;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
@@ -128,6 +130,8 @@ pub fn init(boot_info: &'static mut BootInfo) -> &'static mut BootInfo {
     println!("Interrupts Unmasked");
     x86_64::instructions::interrupts::enable();
     println!("Interrupts Enabled");
+    timer::setup_system_timer();
+    println!("System timer Initialized");
 
     boot_info
 }
