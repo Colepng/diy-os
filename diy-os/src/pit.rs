@@ -51,9 +51,7 @@ impl ChannelPort {
     /// Reads a [`u8`] from the IO port.
     #[inline]
     pub fn read(&mut self) -> u8 {
-        unsafe {
-            self.0.read()
-        }
+        unsafe { self.0.read() }
     }
 
     /// Writes a [`u8`] to the IO port.

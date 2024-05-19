@@ -21,7 +21,7 @@ pub fn setup_system_timer() {
 pub fn sleep(count: u64) {
     *pit::SLEEP_COUNTER.acquire() = count;
     pit::SLEEP_COUNTER.release();
-    
+
     while *pit::SLEEP_COUNTER.acquire() > 0 {
         pit::SLEEP_COUNTER.release();
         x86_64::instructions::hlt();
