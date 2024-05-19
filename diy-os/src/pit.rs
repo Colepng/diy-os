@@ -33,7 +33,7 @@ impl Pit {
         }
     }
 
-    pub const fn give_back(_pit: Pit) {
+    pub fn give_back(_: Self) {
         unsafe { PIT_TAKEN = false }
     }
 }
@@ -106,7 +106,7 @@ impl ConfigureChannelCommand {
 
 impl PitCommand for ConfigureChannelCommand {}
 
-/// Only implements into to prevent accidental conversion from u8 to [ModeRegisterBitFields]
+/// Only implements into to prevent accidental conversion from [`u8`] to [`CommandRegister`]
 #[allow(clippy::from_over_into)]
 impl Into<u8> for ConfigureChannelCommand {
     #[inline]
@@ -115,7 +115,7 @@ impl Into<u8> for ConfigureChannelCommand {
     }
 }
 
-/// Marker trait to represent that this command that can be sent to the pit through [ModeCommandRegister]
+/// Marker trait to represent that this command that can be sent to the pit through [`CommandRegister`]
 trait PitCommand: Into<u8> {}
 
 // pub fn latch_count_value_command() {}
@@ -133,10 +133,11 @@ trait PitCommand: Into<u8> {}
 ///0            Reserved (should be clear)
 pub struct ReadBackCommand(u8);
 
+#[derive(Default)]
 pub struct ReadBackCommandBuilder(u8);
 
 impl<'a> ReadBackCommandBuilder {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(0b1100_0000)
     }
 
@@ -178,14 +179,14 @@ impl<'a> ReadBackCommandBuilder {
     }
 
     /// Builds a [`ReadBackCommand`]
-    pub fn build(&self) -> ReadBackCommand {
+    pub const fn build(&self) -> ReadBackCommand {
         ReadBackCommand(self.0)
     }
 }
 
 impl PitCommand for ReadBackCommand {}
 
-/// Only implements into to prevent accidental conversion from u8 to [ReadBackCommand]
+/// Only implements into to prevent accidental conversion from [`u8`] to [`ReadBackCommand`]
 #[allow(clippy::from_over_into)]
 impl Into<u8> for ReadBackCommand {
     #[inline]
@@ -267,7 +268,7 @@ impl ReloadValueIndicator {
     const BITMASK: u8 = 0b0100_0000;
 
     /// # Safety
-    /// Caller must make sure that value is a valid [ReloadValueIndicator] variant
+    /// Caller must make sure that value is a valid [`ReloadValueIndicator`] variant
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { core::mem::transmute::<u8, Self>(value) }
@@ -285,7 +286,7 @@ impl Channel {
     const BITMASK: u8 = 0b1100_0000;
 
     /// # Safety
-    /// Caller must make sure that value is a valid [Channel] variant
+    /// Caller must make sure that value is a valid [`Channel`] variant
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { core::mem::transmute::<u8, Self>(value) }
@@ -303,7 +304,7 @@ impl AccessMode {
     const BITMASK: u8 = 0b0011_0000;
 
     /// # Safety
-    /// Caller must make sure that value is a valid [AccessMode] variant
+    /// Caller must make sure that value is a valid [`AccessMode`] variant
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { core::mem::transmute::<u8, Self>(value) }
@@ -323,7 +324,7 @@ pub enum OperatingMode {
 impl OperatingMode {
     const BITMASK: u8 = 0b1110;
     /// # Safety
-    /// Caller must make sure that value is a valid [OperatingMode] variant
+    /// Caller must make sure that value is a valid [`OperatingMode`] variant
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { core::mem::transmute::<u8, Self>(value) }
@@ -345,7 +346,7 @@ impl BcdBinaryMode {
     }
 
     /// # Safety
-    /// Caller must make sure that value is a valid [BcdBinaryMode] variant
+    /// Caller must make sure that value is a valid [`BcdBinaryMode`] variant
     #[inline]
     pub const unsafe fn from_u8_unchecked(value: u8) -> Self {
         unsafe { core::mem::transmute::<u8, Self>(value) }
@@ -371,14 +372,14 @@ impl From<BcdBinaryMode> for u8 {
 }
 
 pub fn get_reload_value_from_frequency(frequency: u32) -> u16 {
-    u16::try_from(1192182 / frequency).unwrap()
+    u16::try_from(1_192_182 / frequency).unwrap()
 }
 
 pub fn set_count(pit: &mut Pit, count: u16) -> &mut Pit {
     x86_64::instructions::interrupts::without_interrupts(|| {
         pit.channel_0_port.write((count & 0xFF).try_into().unwrap()); // low_byte
         pit.channel_0_port
-            .write(((count & 0xFF00) >> 8).try_into().unwrap()) // high byte
+            .write(((count & 0xFF00) >> 8).try_into().unwrap()); // high byte
     });
 
     pit
