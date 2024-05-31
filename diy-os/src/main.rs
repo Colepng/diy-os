@@ -19,7 +19,7 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point, BootInfo, BootloaderConfig,
 };
-use core::panic::PanicInfo;
+use core::{arch::{asm, global_asm}, panic::PanicInfo};
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
@@ -51,13 +51,40 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
 
     println!("Hello, world!");
 
-    println!("going to sleep");
-
-    timer::sleep(1000);
-
-    println!("wakign up");
+    // println!("going to sleep");
+    //
+    // timer::sleep(1000);
+    //
+    // println!("wakign up");
+    //
+    print("print sys call");
 
     hlt_loop();
+}
+
+
+/// Parameters to functions are passed in the registers rdi, rsi, rdx, rcx, r8, r9, and further 
+/// values are passed on the stack in reverse order
+///
+/// rax return
+///
+unsafe extern "sysv64" fn sys_call<T, F>(call: u64, t: usize, f: usize) {//where T: , F: core::fmt::Display {
+    unsafe {
+        asm!("mov rsi, rsi");
+        asm!("mov rdx, rdx");
+        asm!("mov rax, {0}", in(reg) call);
+    }
+
+    unsafe { x86_64::instructions::interrupts::software_interrupt::<0x80>() };
+}
+
+fn print(str: &str) {
+    let len = str.len();
+    let ptr = str.as_ptr();
+
+    unsafe { 
+        sys_call::<u64, u64>(0, ptr as usize, len)
+    }
 }
 
 /// This function is called on panic.
