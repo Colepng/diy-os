@@ -122,6 +122,10 @@ impl GraphicBackend for FrameBuffer {
     fn get_width(&mut self) -> usize {
         self.info.width
     }
+
+    fn get_hight(&mut self) -> usize {
+        self.info.height
+    }
 }
 
 impl TextDrawer for FrameBuffer {

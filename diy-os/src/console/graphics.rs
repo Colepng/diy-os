@@ -56,6 +56,7 @@ pub trait GraphicBackend {
     fn set_x(&mut self, x: usize);
     fn set_y(&mut self, y: usize);
     fn get_width(&mut self) -> usize;
+    fn get_hight(&mut self) -> usize;
 }
 
 pub trait TextDrawer: GraphicBackend {
