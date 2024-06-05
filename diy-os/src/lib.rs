@@ -28,7 +28,7 @@
 #![allow(
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
-    clippy::explicit_deref_methods,
+    clippy::explicit_deref_methods
 )]
 
 use bootloader_api::BootInfo;

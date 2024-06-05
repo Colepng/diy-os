@@ -19,11 +19,11 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point, BootInfo, BootloaderConfig,
 };
-use core::{arch::{asm, global_asm}, panic::PanicInfo};
+use core::{arch::asm, panic::PanicInfo};
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
-    println, timer,
+    println,
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -57,21 +57,27 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     //
     // println!("wakign up");
     //
-    print("print sys call");
+    // print("print sys call");
 
     hlt_loop();
 }
 
-
-/// Parameters to functions are passed in the registers rdi, rsi, rdx, rcx, r8, r9, and further 
+/// Parameters to functions are passed in the registers rdi, rsi, rdx, rcx, r8, r9, and further
 /// values are passed on the stack in reverse order
 ///
 /// rax return
 ///
-unsafe extern "sysv64" fn sys_call<T, F>(call: u64, t: usize, f: usize) {//where T: , F: core::fmt::Display {
+///
+#[allow(unused_variables)]
+unsafe extern "sysv64" fn sys_call<Arg1, Arg2, Arg3, Arg4, Arg5>(
+    call: u64,
+    arg1: Arg1,
+    arg2: Arg2,
+    arg3: Arg3,
+    arg4: Arg4,
+    arg5: Arg5,
+) {
     unsafe {
-        asm!("mov rsi, rsi");
-        asm!("mov rdx, rdx");
         asm!("mov rax, {0}", in(reg) call);
     }
 
@@ -82,9 +88,19 @@ fn print(str: &str) {
     let len = str.len();
     let ptr = str.as_ptr();
 
-    unsafe { 
-        sys_call::<u64, u64>(0, ptr as usize, len)
+    unsafe { sys_call::<usize, usize, (), (), ()>(0, ptr as usize, len, (), (), ()) }
+}
+
+fn add(num: usize, other: usize) -> usize {
+    unsafe { sys_call::<usize, usize, (), (), ()>(1, num, other, (), (), ()) }
+
+    let ret: usize;
+
+    unsafe {
+        asm!("mov rax, {0}", out(reg) ret);
     }
+
+    ret
 }
 
 /// This function is called on panic.

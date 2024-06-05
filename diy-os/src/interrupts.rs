@@ -2,7 +2,10 @@ use core::{arch::asm, usize};
 
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
-use x86_64::{structures::idt::{InterruptDescriptorTable, InterruptStackFrame}, VirtAddr};
+use x86_64::{
+    structures::idt::{InterruptDescriptorTable, InterruptStackFrame},
+    VirtAddr,
+};
 
 use crate::{gdt, pit, println};
 
@@ -41,7 +44,7 @@ pub fn unmask() {
 /// Which sys call is passed through rax
 #[naked]
 unsafe extern "sysv64" fn system_call_handler_wrapper() {
-    unsafe { 
+    unsafe {
         asm!("mov rcx, rsp
               sub rsp, 8 // align stack pointer
               mov rdi, rax
@@ -85,14 +88,32 @@ extern "sysv64" fn print() {
     // println!("got {:?}, {:?}", ptr, len);
 
     // println!("in print");
-    let message = unsafe {
-        core::str::from_raw_parts(ptr, len)
-    };
+    let message = unsafe { core::str::from_raw_parts(ptr, len) };
     // //
     println!("{message}");
 }
 
 extern "sysv64" fn add() {
+    let mut num1: usize;
+    let mut num2: usize;
+
+    unsafe {
+        asm!(
+            "mov {num1}, rsi",
+            "mov {num2}, rdx",
+            num1 = out(reg) num1,
+            num2 = out(reg) num2,
+        );
+    }
+
+    let ret = num1 + num2;
+
+    unsafe {
+        asm!(
+        "mov rax, {ret}",
+        ret = in(reg) ret,
+        );
+    }
 }
 
 extern "x86-interrupt" fn general_protection_handler(
