@@ -1,5 +1,3 @@
-use core::{arch::asm, usize};
-
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use x86_64::{
@@ -7,7 +5,7 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{gdt, pit, println};
+use crate::{gdt, pit, println, syscalls};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -27,7 +25,7 @@ lazy_static! {
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
-            idt[0x80].set_handler_addr(VirtAddr::new(system_call_handler_wrapper as u64));
+            idt[0x80].set_handler_addr(VirtAddr::new(syscalls::system_call_handler_wrapper as u64));
         }
         idt
     };
@@ -39,81 +37,6 @@ pub fn init_idt() {
 
 pub fn unmask() {
     unsafe { PICS.acquire().write_masks(0b1111_1100, 0b1111_1111) };
-}
-
-/// Which sys call is passed through rax
-#[naked]
-unsafe extern "sysv64" fn system_call_handler_wrapper() {
-    unsafe {
-        asm!("mov rcx, rsp
-              sub rsp, 8 // align stack pointer
-              mov rdi, rax
-              call {0}
-              add rsp, 8 // reset stack pointer
-              iretq
-              ", sym system_call_handler, options(noreturn));
-    }
-}
-
-extern "sysv64" fn system_call_handler(syscall_index: usize) {
-    // println!("calling syscall {syscall_index}");
-
-    unsafe {
-        SYS_CALLS[syscall_index]();
-    };
-}
-
-// If the class is INTEGER, the next available register of the sequence %rdi,
-// %rsi, %rdx, %rcx, %r8 and %r9 is used
-
-const SYS_CALLS: [unsafe extern "sysv64" fn(); 2] = [print, add];
-
-// pointer is arg 1, len is arg 2
-extern "sysv64" fn print() {
-    let mut ptr: *const u8;
-    let mut len: usize;
-
-    unsafe {
-        asm!(
-            "mov {ptr}, rsi",
-            "mov {len}, rdx",
-            ptr = out(reg) ptr,
-            len = out(reg) len,
-        );
-    }
-
-    // println!("ptr: {}", ptr);
-    // println!("len: {}", len);
-
-    // println!("got {:?}, {:?}", ptr, len);
-
-    // println!("in print");
-    let message = unsafe { core::str::from_raw_parts(ptr, len) };
-    // //
-    println!("{message}");
-}
-
-extern "sysv64" fn add() {
-    let mut num1: usize;
-    let mut num2: usize;
-
-    unsafe {
-        asm!(
-            "mov {num1}, rsi",
-            "mov {num2}, rdx",
-            num1 = out(reg) num1,
-            num2 = out(reg) num2,
-        );
-    }
-
-    let ret = num1 + num2;
-
-    unsafe {
-        asm!(
-        "mov rax, {ret}",
-        ret = in(reg) ret,
-        );
-    }
 }
 
 extern "x86-interrupt" fn general_protection_handler(

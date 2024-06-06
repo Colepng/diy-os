@@ -47,6 +47,7 @@ pub mod memory;
 pub mod pit;
 pub mod serial;
 pub mod spinlock;
+pub mod syscalls;
 pub mod timer;
 
 pub trait Testable {
