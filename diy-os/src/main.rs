@@ -23,7 +23,7 @@ use core::panic::PanicInfo;
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
-    println, timer,
+    println,
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -51,11 +51,13 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
 
     println!("Hello, world!");
 
-    println!("going to sleep");
-
-    timer::sleep(1000);
-
-    println!("wakign up");
+    // println!("going to sleep");
+    //
+    // timer::sleep(1000);
+    //
+    // println!("wakign up");
+    //
+    // print("print sys call");
 
     hlt_loop();
 }

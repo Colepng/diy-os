@@ -1,8 +1,11 @@
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
+use x86_64::{
+    structures::idt::{InterruptDescriptorTable, InterruptStackFrame},
+    VirtAddr,
+};
 
-use crate::{gdt, pit, println};
+use crate::{gdt, pit, println, syscalls};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -22,6 +25,7 @@ lazy_static! {
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+            idt[0x80].set_handler_addr(VirtAddr::new(syscalls::system_call_handler_wrapper as u64));
         }
         idt
     };

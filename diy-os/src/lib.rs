@@ -13,6 +13,9 @@
 #![feature(strict_provenance)]
 #![feature(exposed_provenance)]
 #![feature(layout_for_ptr)]
+#![feature(naked_functions)]
+#![feature(asm_const)]
+#![feature(str_from_raw_parts)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
@@ -25,7 +28,7 @@
 #![allow(
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
-    clippy::explicit_deref_methods,
+    clippy::explicit_deref_methods
 )]
 
 use bootloader_api::BootInfo;
@@ -44,6 +47,7 @@ pub mod memory;
 pub mod pit;
 pub mod serial;
 pub mod spinlock;
+pub mod syscalls;
 pub mod timer;
 
 pub trait Testable {
