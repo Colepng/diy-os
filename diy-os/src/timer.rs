@@ -12,7 +12,7 @@ pub fn setup_system_timer() {
 
     pit.mode_port.write(configure_command);
 
-    let reaload_value = pit::get_reload_value_from_frequency(1000);
+    let reaload_value = pit::get_reload_value_from_frequency(100);
 
     pit::set_count(&mut pit, reaload_value);
 }

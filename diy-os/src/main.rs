@@ -2,6 +2,8 @@
 #![no_main]
 #![feature(optimize_attribute)]
 #![feature(custom_test_frameworks)]
+#![feature(naked_functions)]
+#![feature(asm_const)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -19,7 +21,8 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point, BootInfo, BootloaderConfig,
 };
-use core::panic::PanicInfo;
+use x86_64::{structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags}, VirtAddr};
+use core::{alloc::GlobalAlloc, arch::{asm, global_asm}, fmt::write, mem::transmute, ops::Add, panic::PanicInfo, u64};
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
@@ -58,9 +61,64 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     // println!("wakign up");
     //
     // print("print sys call");
+    println!("{}", diy_os::usermode as u64);
+
+    let frame = frame_allocator.allocate_frame().unwrap();
+    let page = Page::containing_address(VirtAddr::new(0x900000));
+    let flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE;
+    unsafe { mapper.map_to(page, frame, flags, &mut frame_allocator).unwrap().flush() };
+    let addr = page.start_address().as_mut_ptr();
+    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode as *const u8, addr, 29) };
+    
+    let byte1 = unsafe { addr.read() };
+    let byte2 = unsafe { addr.add(1).read() };
+    let byte3 = unsafe { addr.add(2).read() };
+    let byte4 = unsafe { addr.add(3).read() };
+
+
+    let str: *const u8 = [072, 101, 108, 108, 111].as_ptr();
+    unsafe { core::ptr::copy_nonoverlapping(str, addr.add(100), 5); } ;
+
+    println!("{:x}, {:x}, {:x}, {:x}", byte1, byte2, byte3, byte4);
+
+    let stack_addr = unsafe { addr.add(0x1000) } as u64;
+
+    println!("entering userspace");
+
+    diy_os::into_usermode(addr as u64, stack_addr);
 
     hlt_loop();
 }
+
+// const a_ptr: *const u64 = usermode as *const u64;
+// const a: u64 = unsafe { transmute(a_ptr) };
+
+
+// #[naked]
+// extern "sysv64" fn jump_usermode() {
+//     unsafe {
+//         asm!("
+//             extern test_user_function
+//             mov ax, (4 * 8) | 3
+//               mov ds, ax
+//               mov es, ax
+//               mov fs, ax
+//               mov gs, ax
+//
+//               // stack frame setup
+//               mov eax, esp
+//               push (4 * 8) | 3 // data selector
+//               push rax // current esp
+//               pushf // eflags
+//               push (3 * 8) | 3 // code selector (ring 3 code with bottom 2 bits set for ring 3)
+// 	          push test_user_function // instruction address to return to
+//               iret
+//             ",
+//             options(noreturn),
+//             options()
+//         );
+//     }
+// }
 
 /// This function is called on panic.
 #[cfg(not(test))] // new attribute

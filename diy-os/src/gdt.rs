@@ -1,3 +1,4 @@
+use core::borrow::BorrowMut;
 use core::ptr::addr_of;
 
 use lazy_static::lazy_static;
@@ -13,9 +14,9 @@ lazy_static! {
     static ref GDT: (GlobalDescriptorTable, Selectors) = {
         let mut gdt = GlobalDescriptorTable::new();
         let code_selector = gdt.append(Descriptor::kernel_code_segment());
-        let _ = gdt.append(Descriptor::kernel_data_segment());
-        let _ = gdt.append(Descriptor::user_code_segment());
-        let _ = gdt.append(Descriptor::user_data_segment());
+        let kernal_data = gdt.append(Descriptor::kernel_data_segment());
+        let user_code = gdt.append(Descriptor::user_code_segment());
+        let user_data = gdt.append(Descriptor::user_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
         (
             gdt,
@@ -27,18 +28,29 @@ lazy_static! {
     };
 }
 
+const STACK_SIZE: usize = 4096 * 5;
+static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+
 lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            const STACK_SIZE: usize = 4096 * 5;
-            static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-
+        
             let stack_start = VirtAddr::from_ptr(unsafe { addr_of!(STACK) });
             stack_start + STACK_SIZE as u64
         };
         tss
     };
+}
+
+pub fn set_esp0(addr: VirtAddr) {
+    #[allow(mutable_transmutes)]
+
+    let tss = unsafe { 
+        core::mem::transmute::<&TaskStateSegment, &mut TaskStateSegment>(&TSS)
+    };
+
+    tss.privilege_stack_table[0] = addr;
 }
 
 pub fn init() {

@@ -2,17 +2,23 @@ use crate::println;
 use core::arch::asm;
 
 /// Which sys call is passed through rax
-#[naked]
+// #[naked]
 pub unsafe extern "sysv64" fn system_call_handler_wrapper() {
-    unsafe {
-        asm!("mov rcx, rsp
-            sub rsp, 8 // align stack pointer
-            mov rdi, rax
-            call {0}
-            add rsp, 8 // reset stack pointer
-            iretq
-            ", sym system_call_handler, options(noreturn));
-    }
+    loop {}
+    // unsafe {
+    //     asm!("iretq", options(noreturn));
+    // }
+    // loop {}
+    // println!("got to sysall");
+    // unsafe {
+    //     asm!("mov rcx, rsp
+    //         sub rsp, 8 // align stack pointer
+    //         mov rdi, rax
+    //         call {0}
+    //         add rsp, 8 // reset stack pointer
+    //         iretq
+    //         ", sym system_call_handler, options(noreturn));
+    // }
 }
 
 extern "sysv64" fn system_call_handler(syscall_index: usize) {

@@ -25,12 +25,27 @@ unsafe extern "sysv64" fn sys_call<Arg1, Arg2, Arg3, Arg4, Arg5>(
         );
     }
 }
-
-pub fn print(str: &str) {
-    let len = str.len();
+#[inline(always)]
+pub fn print(str: &str, len: usize) {
+    let len = len;
     let ptr = str.as_ptr();
 
-    unsafe { sys_call::<usize, usize, (), (), ()>(0, ptr as usize, len, (), (), ()) }
+    // unsafe { sys_call::<usize, usize, (), (), ()>(0, ptr as usize, len, (), (), ()) }
+
+    unsafe {
+        asm!("push rcx",
+            "mov rax, 0",
+            "mov rsi, rdi",
+            "mov rdx, rsi",
+            "int 0x80",
+            "pop rcx",
+            "ret",
+            // func = sym x86_64::instructions::interrupts::software_interrupt::<0x080>,
+            // ptr = in(reg) ptr,
+            // len = in(reg) len,
+            options(noreturn),
+        );
+    }
 }
 
 pub fn add(num: usize, other: usize) -> usize {
