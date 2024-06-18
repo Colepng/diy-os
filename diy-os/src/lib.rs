@@ -51,6 +51,8 @@ pub mod spinlock;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;
+pub mod elf;
+pub mod filesystem;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
