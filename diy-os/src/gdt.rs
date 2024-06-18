@@ -14,9 +14,9 @@ lazy_static! {
     static ref GDT: (GlobalDescriptorTable, Selectors) = {
         let mut gdt = GlobalDescriptorTable::new();
         let code_selector = gdt.append(Descriptor::kernel_code_segment());
-        let kernal_data = gdt.append(Descriptor::kernel_data_segment());
-        let user_code = gdt.append(Descriptor::user_code_segment());
-        let user_data = gdt.append(Descriptor::user_data_segment());
+        let _kernal_data = gdt.append(Descriptor::kernel_data_segment());
+        let _user_code = gdt.append(Descriptor::user_code_segment());
+        let _user_data = gdt.append(Descriptor::user_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
         (
             gdt,

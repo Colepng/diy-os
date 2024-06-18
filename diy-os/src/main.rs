@@ -22,15 +22,7 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point, BootInfo, BootloaderConfig,
 };
-use core::{
-    alloc::GlobalAlloc,
-    arch::{asm, global_asm},
-    fmt::write,
-    mem::transmute,
-    ops::Add,
-    panic::PanicInfo,
-    u64,
-};
+use core::panic::PanicInfo;
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
@@ -87,7 +79,7 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
             .flush()
     };
     let addr: *mut u8 = page.start_address().as_mut_ptr();
-    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode as *const u8, addr, 100) };
+    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode::usermode as *const u8, addr, 100) };
 
     // let byte1 = unsafe { addr.read() };
     // let byte2 = unsafe { addr.add(1).read() };
@@ -107,7 +99,7 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
 
     println!("entering userspace");
 
-    diy_os::into_usermode(addr as u64, stack_addr);
+    diy_os::usermode::into_usermode(addr as u64, stack_addr);
 
     hlt_loop();
 }
