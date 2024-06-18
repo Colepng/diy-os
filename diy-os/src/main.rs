@@ -4,6 +4,7 @@
 #![feature(custom_test_frameworks)]
 #![feature(naked_functions)]
 #![feature(asm_const)]
+#![feature(pointer_is_aligned_to)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -21,12 +22,23 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point, BootInfo, BootloaderConfig,
 };
-use x86_64::{structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags}, VirtAddr};
-use core::{alloc::GlobalAlloc, arch::{asm, global_asm}, fmt::write, mem::transmute, ops::Add, panic::PanicInfo, u64};
+use core::{
+    alloc::GlobalAlloc,
+    arch::{asm, global_asm},
+    fmt::write,
+    mem::transmute,
+    ops::Add,
+    panic::PanicInfo,
+    u64,
+};
 use diy_os::{
     allocator, hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
     println,
+};
+use x86_64::{
+    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags},
+    VirtAddr,
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -61,27 +73,37 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     // println!("wakign up");
     //
     // print("print sys call");
-    println!("{}", diy_os::usermode as u64);
 
     let frame = frame_allocator.allocate_frame().unwrap();
-    let page = Page::containing_address(VirtAddr::new(0x900000));
-    let flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE;
-    unsafe { mapper.map_to(page, frame, flags, &mut frame_allocator).unwrap().flush() };
-    let addr = page.start_address().as_mut_ptr();
-    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode as *const u8, addr, 29) };
-    
-    let byte1 = unsafe { addr.read() };
-    let byte2 = unsafe { addr.add(1).read() };
-    let byte3 = unsafe { addr.add(2).read() };
-    let byte4 = unsafe { addr.add(3).read() };
+    let page = Page::containing_address(VirtAddr::new(0x90000));
+    let flags = PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::PRESENT
+        | PageTableFlags::NO_CACHE;
+    unsafe {
+        mapper
+            .map_to(page, frame, flags, &mut frame_allocator)
+            .unwrap()
+            .flush()
+    };
+    let addr: *mut u8 = page.start_address().as_mut_ptr();
+    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode as *const u8, addr, 100) };
 
+    // let byte1 = unsafe { addr.read() };
+    // let byte2 = unsafe { addr.add(1).read() };
+    // let byte3 = unsafe { addr.add(2).read() };
+    // let byte4 = unsafe { addr.add(3).read() };
+    //
+    // let str: *const u8 = [072, 101, 108, 108, 111].as_ptr();
+    // unsafe {
+    //     core::ptr::copy_nonoverlapping(str, addr.add(100), 5);
+    // };
 
-    let str: *const u8 = [072, 101, 108, 108, 111].as_ptr();
-    unsafe { core::ptr::copy_nonoverlapping(str, addr.add(100), 5); } ;
-
-    println!("{:x}, {:x}, {:x}, {:x}", byte1, byte2, byte3, byte4);
+    // println!("{:x}, {:x}, {:x}, {:x}", byte1, byte2, byte3, byte4);
 
     let stack_addr = unsafe { addr.add(0x1000) } as u64;
+
+    println!("{}", addr.is_aligned_to(8));
 
     println!("entering userspace");
 
@@ -92,7 +114,6 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
 
 // const a_ptr: *const u64 = usermode as *const u64;
 // const a: u64 = unsafe { transmute(a_ptr) };
-
 
 // #[naked]
 // extern "sysv64" fn jump_usermode() {

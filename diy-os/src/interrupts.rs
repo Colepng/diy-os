@@ -1,7 +1,9 @@
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use x86_64::{
-    set_general_handler, structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode}, VirtAddr
+    set_general_handler,
+    structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
+    VirtAddr,
 };
 
 use crate::{gdt, pit, println, syscalls};
@@ -18,16 +20,24 @@ lazy_static! {
         set_general_handler!(&mut idt, general_handler);
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         unsafe {
+            idt.invalid_opcode
+                .set_handler_fn(invalid_opcode_handler)
+                .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-            idt.page_fault.set_handler_fn(page_fault_handler).set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
+            idt.page_fault
+                .set_handler_fn(page_fault_handler)
+                .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt.general_protection_fault
                 .set_handler_fn(general_protection_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
-            idt[0x80].set_handler_addr(VirtAddr::new(syscalls::system_call_handler_wrapper as u64)).set_privilege_level(x86_64::PrivilegeLevel::Ring3).set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
+            idt[0x80]
+                .set_handler_addr(VirtAddr::new(syscalls::system_call_handler_wrapper as u64))
+                .set_privilege_level(x86_64::PrivilegeLevel::Ring3)
+                .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
         idt
     };
@@ -42,7 +52,14 @@ pub fn unmask() {
 }
 
 fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
-    panic!("EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex {}", stack_frame, error_code, index);
+    panic!(
+        "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex {:x}",
+        stack_frame, error_code, index
+    );
+}
+
+extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
+    panic!("invalid_opcode \n{:#?}", stack_frame,)
 }
 
 extern "x86-interrupt" fn general_protection_handler(
@@ -55,8 +72,14 @@ extern "x86-interrupt" fn general_protection_handler(
     );
 }
 
-extern "x86-interrupt" fn page_fault_handler(stack_frame: InterruptStackFrame, error_code: PageFaultErrorCode) {
-    panic!("EXCEPTION: page fault\n{:#?}, \nerror code {:?}", stack_frame, error_code);
+extern "x86-interrupt" fn page_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    panic!(
+        "EXCEPTION: page fault\n{:#?}, \nerror code {:?}",
+        stack_frame, error_code
+    );
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {

@@ -35,7 +35,6 @@ lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-        
             let stack_start = VirtAddr::from_ptr(unsafe { addr_of!(STACK) });
             stack_start + STACK_SIZE as u64
         };
@@ -45,10 +44,7 @@ lazy_static! {
 
 pub fn set_esp0(addr: VirtAddr) {
     #[allow(mutable_transmutes)]
-
-    let tss = unsafe { 
-        core::mem::transmute::<&TaskStateSegment, &mut TaskStateSegment>(&TSS)
-    };
+    let tss = unsafe { core::mem::transmute::<&TaskStateSegment, &mut TaskStateSegment>(&TSS) };
 
     tss.privilege_stack_table[0] = addr;
 }
