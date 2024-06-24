@@ -40,19 +40,19 @@ pub extern "sysv64" fn into_usermode(entry: u64, stack_addr: u64) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn usermode() {
-    unsafe {
-        asm!(
-            "mov rax, 1",
-            "mov rdx, 35",
-            "mov rsi, 30",
-            "int 0x80",
-            "push rax",
-            "mov rax, 0",
-            "mov rsi, rsp",
-            "mov rdx, 1",
-            "int 0x80",
-        );
-    }
-}
+// #[no_mangle]
+// pub extern "C" fn usermode() {
+//     unsafe {
+//         asm!(
+//             "mov rax, 1",
+//             "mov rdx, 35",
+//             "mov rsi, 30",
+//             "int 0x80",
+//             "push rax",
+//             "mov rax, 0",
+//             "mov rsi, rsp",
+//             "mov rdx, 1",
+//             "int 0x80",
+//         );
+//     }
+// }
