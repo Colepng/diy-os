@@ -23,13 +23,16 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
+use core::{ptr, slice};
 use diy_os::{
-    allocator, hlt_loop, init,
+    allocator, elf,
+    filesystem::ustar,
+    hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
     println,
 };
 use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags},
+    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
     VirtAddr,
 };
 
@@ -56,82 +59,122 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     let mut mapper = unsafe { memory::init(offset_addr) };
     allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("Failed to setup heap fuck u");
 
+    let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
+    let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr) };
+
     println!("Hello, world!");
 
-    // println!("going to sleep");
-    //
-    // timer::sleep(1000);
-    //
-    // println!("wakign up");
-    //
-    // print("print sys call");
+    let elf_file = &ramdisk.get_files()[0];
+    let file_ptr = elf_file.get_raw_bytes().unwrap().as_ptr();
+    let elf_header = unsafe { &*file_ptr.cast::<elf::Header>() };
 
-    let frame = frame_allocator.allocate_frame().unwrap();
-    let page = Page::containing_address(VirtAddr::new(0x90000));
-    let flags = PageTableFlags::USER_ACCESSIBLE
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::PRESENT
-        | PageTableFlags::NO_CACHE;
-    unsafe {
-        mapper
-            .map_to(page, frame, flags, &mut frame_allocator)
-            .unwrap()
-            .flush()
+    println!("header, {:#?}", elf_header);
+
+    let program_header = unsafe {
+        &*file_ptr
+            .byte_offset(elf_header.program_header_table_offset as isize)
+            .cast::<elf::ProgramHeaderTableEntry>()
     };
-    let addr: *mut u8 = page.start_address().as_mut_ptr();
-    unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode::usermode as *const u8, addr, 100) };
 
-    // let byte1 = unsafe { addr.read() };
-    // let byte2 = unsafe { addr.add(1).read() };
-    // let byte3 = unsafe { addr.add(2).read() };
-    // let byte4 = unsafe { addr.add(3).read() };
+    println!("program_header: {:#?}", program_header);
+
+    let ph_virtaddr = program_header.virtual_address;
+
+    println!("check alignment {}", program_header.virtual_address.as_u64() % program_header.alignment);
+
+    let page_for_load: Page<Size4KiB> = Page::containing_address(ph_virtaddr);
+
+    let flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE; //| PageTableFlags::
+                                                                                                                                 //
+    let frame = frame_allocator.allocate_frame().unwrap(); 
+
+    unsafe {
+        mapper.map_to_with_table_flags(page_for_load, frame, flags, flags, &mut frame_allocator).unwrap().flush();
+    }
+
+    unsafe {
+        // Zeros mem for instructions
+        ph_virtaddr
+            .as_mut_ptr::<u8>()
+            .write_bytes(0, program_header.size_of_segment_mem as usize);
+
+        file_ptr
+            .add(elf_header.program_header_table_offset)
+            .add(elf_header.program_header_entry_size as usize)
+            .copy_to_nonoverlapping(
+                ph_virtaddr.as_mut_ptr::<u8>(),
+                program_header.size_of_segment_file as usize,
+            );
+    }
+
+    println!("ph: {:x}, elf: {:x}", ph_virtaddr.as_u64(), elf_header.entery_address.as_u64());
+
+    // let offset = elf_header.program_header_table_offset + elf_header.program_header_entry_size as usize;
+    // let segment_ptr = unsafe { file_ptr.byte_offset(offset.try_into().unwrap()) };
+   
+    // let a = 
+    //     unsafe { core::slice::from_raw_parts(segment_ptr, 0x200) };
     //
-    // let str: *const u8 = [072, 101, 108, 108, 111].as_ptr();
+    // println!("first byte: {a:?}");
+
+    diy_os::usermode::into_usermode(program_header.virtual_address.as_u64(), page_for_load.start_address().as_u64() + 0x900);
+
+
+    // let page = Page::containing_address(VirtAddr::new( program_header.virtual_address as u64) );
+    // let segment_flags = program_header.flags;
+    //
+    //
+    // let mut flags: PageTableFlags = PageTableFlags::empty();
+    //
+    // if (segment_flags.0 & elf::ProgramHeaderBitFlagsMasks::WritePermission as u32) > 0 {
+    //     flags |= PageTableFlags::WRITABLE;
+    // }
+    //
+    // flags |= PageTableFlags::USER_ACCESSIBLE
+    //     | PageTableFlags::PRESENT
+    //     | PageTableFlags::NO_CACHE;
+    //
+    // let frame = frame_allocator.allocate_frame().unwrap();
+    //
     // unsafe {
-    //     core::ptr::copy_nonoverlapping(str, addr.add(100), 5);
+    //
+    //     mapper
+    //         .map_to(page, frame, flags, &mut frame_allocator)
+    //         .unwrap()
+    //         .flush()
     // };
-
-    // println!("{:x}, {:x}, {:x}, {:x}", byte1, byte2, byte3, byte4);
-
-    let stack_addr = unsafe { addr.add(0x1000) } as u64;
-
-    println!("{}", addr.is_aligned_to(8));
-
-    println!("entering userspace");
-
-    diy_os::usermode::into_usermode(addr as u64, stack_addr);
+    //
+    // let segment_ptr = unsafe { file_ptr.add(elf_header.program_header_table_offset).add(elf_header.program_header_entry_size as usize) };
+    //
+    // let instructions = unsafe { slice::from_raw_parts(segment_ptr, 10) };
+    //
+    // println!("{:?}", instructions);
+    //
+    // let stack_page = Page::containing_address(VirtAddr::new(0x90000));
+    // let stack_flags = PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE;
+    //
+    // let frame = frame_allocator.allocate_frame().unwrap();
+    //
+    // unsafe {
+    //     mapper
+    //         .map_to(stack_page, frame, stack_flags, &mut frame_allocator)
+    //         .unwrap()
+    //         .flush()
+    // };
+    //
+    // // let addr: *mut u8 = page.start_address().as_mut_ptr();
+    // // unsafe { core::ptr::copy_nonoverlapping(segment_ptr, elf_header.entery_address.as_mut_ptr(), program_header.size_of_segment_file as usize) };
+    // unsafe { core::ptr::copy_nonoverlapping(diy_os::usermode::usermode as *const u8 , page.start_address().as_mut_ptr(), program_header.size_of_segment_file as usize) };
+    //
+    // let stack_addr = stack_page.start_address().as_u64() + 0x0999;
+    //
+    // println!("entering userspace");
+    //
+    // //diy_os::usermode::into_usermode(elf_header.entery_address.as_u64(), stack_addr);
+    // diy_os::usermode::into_usermode(page.start_address().as_u64(), stack_addr);
 
     hlt_loop();
 }
-
-// const a_ptr: *const u64 = usermode as *const u64;
-// const a: u64 = unsafe { transmute(a_ptr) };
-
-// #[naked]
-// extern "sysv64" fn jump_usermode() {
-//     unsafe {
-//         asm!("
-//             extern test_user_function
-//             mov ax, (4 * 8) | 3
-//               mov ds, ax
-//               mov es, ax
-//               mov fs, ax
-//               mov gs, ax
-//
-//               // stack frame setup
-//               mov eax, esp
-//               push (4 * 8) | 3 // data selector
-//               push rax // current esp
-//               pushf // eflags
-//               push (3 * 8) | 3 // code selector (ring 3 code with bottom 2 bits set for ring 3)
-// 	          push test_user_function // instruction address to return to
-//               iret
-//             ",
-//             options(noreturn),
-//             options()
-//         );
-//     }
-// }
 
 /// This function is called on panic.
 #[cfg(not(test))] // new attribute

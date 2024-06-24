@@ -53,14 +53,16 @@ impl<WRITABLE: Writeability, READABLE: Readabitly, FILE: File<WRITABLE, READABLE
     }
 }
 
-impl<WRITABLE: Writeability, FILE: File<WRITABLE, Readable>> TypestateFile<WRITABLE, Readable, FILE> {
+impl<WRITABLE: Writeability, FILE: File<WRITABLE, Readable>>
+    TypestateFile<WRITABLE, Readable, FILE>
+{
     pub fn read(&self) -> Result<&[u8], INError> {
         self.inner.read()
     }
 }
 
 impl<READABLE: Readabitly, FILE: File<Writable, READABLE>> TypestateFile<Writable, READABLE, FILE> {
-    pub fn write(&mut self, buf: impl Into<&[u8]>) -> Result<usize, OUTError>{
+    pub fn write(&mut self, buf: impl Into<&[u8]>) -> Result<usize, OUTError> {
         self.inner.write(buf)
     }
 }

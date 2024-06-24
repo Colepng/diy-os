@@ -1,4 +1,7 @@
-use core::{ffi::{c_char, c_uchar}, fmt::write};
+use core::{
+    ffi::{c_char, c_uchar},
+    fmt::write,
+};
 
 use alloc::{slice, vec::Vec};
 
@@ -13,9 +16,9 @@ impl Ustar {
     ///
     /// # Safety
     /// Caller must make that the addr is valid
-    pub const unsafe fn new(addr: u64) -> Self {
+    pub unsafe fn new(addr: u64) -> Self {
         Self {
-            ptr: addr as *mut MetaData,
+            ptr: core::ptr::with_exposed_provenance_mut::<MetaData>(addr as usize),
         }
     }
 

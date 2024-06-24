@@ -1,3 +1,4 @@
+use alloc::slice;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use x86_64::{

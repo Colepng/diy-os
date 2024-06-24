@@ -41,6 +41,8 @@ extern crate alloc;
 
 pub mod allocator;
 pub mod console;
+pub mod elf;
+pub mod filesystem;
 pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
@@ -51,8 +53,6 @@ pub mod spinlock;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;
-pub mod elf;
-pub mod filesystem;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]

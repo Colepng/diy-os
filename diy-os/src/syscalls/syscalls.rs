@@ -4,6 +4,7 @@ use core::arch::asm;
 /// Which sys call is passed through rax
 #[naked]
 pub unsafe extern "sysv64" fn system_call_handler_wrapper() {
+    // loop {}
     unsafe {
         asm!("mov rcx, rsp
             sub rsp, 8 // align stack pointer
