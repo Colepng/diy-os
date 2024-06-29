@@ -25,11 +25,12 @@ use bootloader_api::{
 use core::panic::PanicInfo;
 use core::{ptr, slice};
 use diy_os::{
-    allocator::{self, fixed_size_block}, elf,
+    allocator::{self, fixed_size_block},
+    elf,
     filesystem::{self, ustar},
     hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
-    println,
+    println, multitasking::{self, usermode, Process},
 };
 use x86_64::{
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
@@ -65,79 +66,26 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     println!("Hello, world!");
 
     let elf_file = &ramdisk.get_files()[0];
-    
-    let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
+
+    // let exit_code = usermode::load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator).unwrap();
+    // println!("{:?}", exit_code);
+    println!("loading");
+    let temp = usermode::load_elf(elf_file, &mut mapper, &mut frame_allocator).unwrap();
+    println!("{temp:?}");
+
+    let mut sched = multitasking::SCHEDULER.acquire();
+    let process = Process::new(temp.0, temp.1);
+    sched.spawn_new(process);
+    core::mem::drop(sched);
+    println!("spawned");
+
+    multitasking::switch_to_task();
 
     hlt_loop();
 }
 
-#[repr(u8)]
-enum ExitCode {
-    Successful = 0
-}
-
-fn load_elf_and_jump_into_it(file: &ustar::File, mapper: &mut impl Mapper<Size4KiB>, frame_allocator: &mut impl FrameAllocator<Size4KiB> ) -> Result<ExitCode, u8> {
-    let file_ptr = file.get_raw_bytes().unwrap().as_ptr();
-    let elf_header = unsafe { &*file_ptr.cast::<elf::Header>() };
-
-    println!("header, {:#?}", elf_header);
-
-    let program_header = unsafe {
-        &*file_ptr
-            .byte_offset(elf_header.program_header_table_offset as isize)
-            .cast::<elf::ProgramHeaderTableEntry>()
-    };
-
-    println!("program_header: {:#?}", program_header);
-
-    let ph_virtaddr = program_header.virtual_address;
-
-    println!("check alignment {}", program_header.virtual_address.as_u64() % program_header.alignment);
-
-    let page_for_load: Page<Size4KiB> = Page::containing_address(ph_virtaddr);
-
-    // Has to be writable to write the load segment to the page in the first place
-    let flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE; //| PageTableFlags::
-                                                                                                                                 //
-    let frame = frame_allocator.allocate_frame().unwrap(); 
-
-    // Setup page for load
-    unsafe {
-        mapper.map_to_with_table_flags(page_for_load, frame, flags, flags, frame_allocator).unwrap().flush();
-    }
-
-    unsafe {
-        // Zeros mem for instructions
-        ph_virtaddr
-            .as_mut_ptr::<u8>()
-            .write_bytes(0, program_header.size_of_segment_mem as usize);
-
-        file_ptr
-            .add(elf_header.program_header_table_offset)
-            .add(elf_header.program_header_entry_size as usize)
-            .copy_to_nonoverlapping(
-                ph_virtaddr.as_mut_ptr::<u8>(),
-                program_header.size_of_segment_file as usize,
-            );
-    }
-
-    // Setup page for stack
-    let page_stack: Page<Size4KiB> = Page::containing_address(ph_virtaddr + 0x2000);
-    let stack_flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE;
-    let stack_frame = frame_allocator.allocate_frame().unwrap();
-
-    // map page for stack
-    unsafe {
-        mapper.map_to_with_table_flags(page_stack, stack_frame, stack_flags, stack_flags, frame_allocator).unwrap().flush();
-    }
-
-    diy_os::usermode::into_usermode(program_header.virtual_address.as_u64(), page_stack.start_address().as_u64() + 0x1000);
-
-    Ok(ExitCode::Successful)
-}
-
 /// This function is called on panic.
-    #[cfg(not(test))] // new attribute
+#[cfg(not(test))] // new attribute
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);

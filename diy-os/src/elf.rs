@@ -33,6 +33,12 @@ pub struct Header {
     pub section_header_section_name_index: u16,
 }
 
+impl Header {
+    pub fn is_valid_elf(&self) -> bool {
+        self.identification.magic_number == [b'\x7f', b'E', b'L', b'F']
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct Identification {

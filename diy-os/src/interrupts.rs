@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use alloc::slice;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -7,7 +9,7 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{gdt, pit, println, syscalls};
+use crate::{gdt, pit, println, syscalls, timer};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -98,12 +100,25 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    let mut counter = pit::SLEEP_COUNTER.acquire();
-    *counter = (*counter).saturating_sub(1);
+    {
+        let mut counter = pit::SLEEP_COUNTER.acquire();
+        *counter = (*counter).saturating_sub(1);
+    }
+
+    {
+        let mut time_kepper = timer::TIMEKEEPER.acquire();
+        time_kepper.tick();
+    }
 
     unsafe {
         PICS.acquire()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+
+    // println!("c");
+
+    if *timer::READY.acquire() {
+            // processes::startuser();
     }
 }
 

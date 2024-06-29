@@ -1,4 +1,4 @@
-use crate::println;
+use crate::{println, multitasking};
 use core::arch::asm;
 
 /// Which sys call is passed through rax
@@ -27,7 +27,7 @@ extern "sysv64" fn system_call_handler(syscall_index: usize) {
 // If the class is INTEGER, the next available register of the sequence %rdi,
 // %rsi, %rdx, %rcx, %r8 and %r9 is used
 
-const SYS_CALLS: [unsafe extern "sysv64" fn(); 2] = [print, add];
+const SYS_CALLS: [unsafe extern "sysv64" fn(); 3] = [exit, print, add];
 
 // pointer is arg 1, len is arg 2
 extern "sysv64" fn print() {
@@ -75,4 +75,14 @@ extern "sysv64" fn add() {
             ret = in(reg) ret,
         );
     }
+}
+
+extern "sysv64" fn exit() {
+    let mut sched = multitasking::SCHEDULER.acquire();
+    let index = sched.index;
+    sched.process_finished(index);
+
+    core::mem::drop(sched);
+
+    multitasking::switch_to_task();
 }

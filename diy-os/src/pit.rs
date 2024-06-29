@@ -369,6 +369,7 @@ impl From<BcdBinaryMode> for u8 {
     }
 }
 
+// in hartz, hartz/10 = ms
 pub fn get_reload_value_from_frequency(frequency: u32) -> u16 {
     u16::try_from(1_192_182 / frequency).unwrap()
 }

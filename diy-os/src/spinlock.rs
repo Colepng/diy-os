@@ -5,6 +5,8 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use crate::println;
+
 pub struct Spinlock<T: ?Sized> {
     locked: AtomicBool,
     interrupts_enabled: UnsafeCell<Option<bool>>,

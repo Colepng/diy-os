@@ -17,6 +17,7 @@
 #![feature(naked_functions)]
 #![feature(asm_const)]
 #![feature(str_from_raw_parts)]
+#![feature(ptr_as_ref_unchecked)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(
     clippy::suspicious,
@@ -52,7 +53,7 @@ pub mod serial;
 pub mod spinlock;
 pub mod syscalls;
 pub mod timer;
-pub mod usermode;
+pub mod multitasking;
 
 pub trait Testable {
     #[allow(clippy::unused_unit)]
