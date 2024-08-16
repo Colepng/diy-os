@@ -3,6 +3,7 @@
 #![feature(optimize_attribute)]
 #![feature(custom_test_frameworks)]
 #![feature(naked_functions)]
+#![feature(never_type)]
 #![feature(pointer_is_aligned_to)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
@@ -22,14 +23,7 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
-use diy_os::{
-    allocator::{self},
-    elf,
-    filesystem::ustar,
-    hlt_loop, init,
-    memory::{self, BootInfoFrameAllocator},
-    println,
-};
+use diy_os::{elf, filesystem::ustar, hlt_loop, init, println};
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -41,28 +35,27 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
     config
 };
 
-entry_point!(main, config = &BOOTLOADER_CONFIG);
+entry_point!(main_wrapper, config = &BOOTLOADER_CONFIG);
 
 #[no_mangle]
-extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
-    boot_info = init(boot_info);
+extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
+    match main(boot_info) {
+        Err(err) => panic!("{err:?}"),
+    }
+}
 
-    let offset_addr =
-        x86_64::VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
-
-    // setup the heap
-    let mut frame_allocator = unsafe { BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-    let mut mapper = unsafe { memory::init(offset_addr) };
-    allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("Failed to setup heap fuck u");
+#[no_mangle]
+extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
+    let (boot_info, _frame_allocator, _mapper) = init(boot_info, 10)?;
 
     let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
-    let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into().unwrap()) };
+    let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into()?) };
 
     println!("Hello, world!");
 
     let elf_file = &ramdisk.get_files()[0];
 
-    let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
+    // let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
 
     hlt_loop();
 }

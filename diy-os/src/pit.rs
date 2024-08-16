@@ -1,6 +1,6 @@
 use x86_64::instructions::port::{Port, PortWriteOnly};
 
-use crate::spinlock::Spinlock;
+use crate::{errors, spinlock::Spinlock};
 
 /// Lets all agree to never touch this in anything but the main cpu thread
 static mut PIT_TAKEN: bool = false;
@@ -16,7 +16,7 @@ pub struct Pit {
 }
 
 impl Pit {
-    const FREQUENCY: u32 = 1_193_182;
+    pub const FREQUENCY: u32 = 1_193_182;
 
     const fn new() -> Self {
         Self {
@@ -39,14 +39,12 @@ impl Pit {
         unsafe { PIT_TAKEN = false }
     }
 
-    /// # Safety
-    /// Caller must make sure `frequency` is inside the possible range frequencies
-    /// Min of `19hz`
-    /// Max of `1_192_182hz`
-    pub const unsafe fn frequency_divder_from_frequency_unchecked(frequency: u32) -> u16 {
-        (Self::FREQUENCY / frequency) as u16
+    #[allow(clippy::missing_panics_doc)] // Can't panic
+    pub fn frequency_divder_from_frequency(frequency: PitFrequency) -> u16 {
+        u16::try_from(Self::FREQUENCY / frequency.get_frequency()).unwrap()
     }
 
+    #[allow(clippy::missing_panics_doc)] // Can't panic
     pub fn set_frequency_divder(&mut self, divider: u16) {
         x86_64::instructions::interrupts::without_interrupts(|| {
             self.channel_0_port
@@ -60,6 +58,63 @@ impl Pit {
 impl Default for Pit {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PitFrequency {
+    frequency: u32,
+}
+
+impl PitFrequency {
+    const MAX: u32 = Pit::FREQUENCY;
+    const MIN: u32 = 19;
+
+    /// .
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if frequency is outside the allowed range.
+    /// Allow because `RangeInclusive` contains method is not const
+    #[allow(clippy::manual_range_contains)]
+    pub const fn try_new(
+        frequency: u32,
+    ) -> Result<Self, errors::validity::InputOutOfRangeInclusive<u32>> {
+        if frequency >= Self::MIN && frequency <= Self::MAX {
+            Ok(unsafe { Self::new_unchecked(frequency) })
+        } else {
+            Err(errors::validity::InputOutOfRangeInclusive::<u32> {
+                max: Self::MAX,
+                min: Self::MIN,
+                value: frequency,
+            })
+        }
+    }
+
+    /// # Safety
+    /// Caller must make sure `frequency` is inside the possible range
+    /// Min of `19hz`
+    /// Max of `1_192_182hz`
+    pub const unsafe fn new_unchecked(frequency: u32) -> Self {
+        Self { frequency }
+    }
+
+    pub const fn get_frequency(&self) -> u32 {
+        self.frequency
+    }
+}
+
+impl From<PitFrequency> for u32 {
+    fn from(val: PitFrequency) -> Self {
+        val.frequency
+    }
+}
+
+impl TryFrom<u32> for PitFrequency {
+    type Error = errors::validity::InputOutOfRangeInclusive<u32>;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::try_new(value)
     }
 }
 
