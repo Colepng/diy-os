@@ -5,6 +5,9 @@ use crate::println;
 use core::arch::asm;
 
 /// Which sys call is passed through rax
+/// # Safety
+/// Syscall id must be passed through rax
+/// Rax contains return value
 #[naked]
 pub unsafe extern "sysv64" fn system_call_handler_wrapper() {
     // loop {}
