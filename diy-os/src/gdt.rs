@@ -1,4 +1,3 @@
-use core::borrow::BorrowMut;
 use core::ptr::addr_of;
 
 use lazy_static::lazy_static;
@@ -40,13 +39,6 @@ lazy_static! {
         };
         tss
     };
-}
-
-pub fn set_esp0(addr: VirtAddr) {
-    #[allow(mutable_transmutes)]
-    let tss = unsafe { core::mem::transmute::<&TaskStateSegment, &mut TaskStateSegment>(&TSS) };
-
-    tss.privilege_stack_table[0] = addr;
 }
 
 pub fn init() {

@@ -15,7 +15,6 @@
 #![feature(exposed_provenance)]
 #![feature(layout_for_ptr)]
 #![feature(naked_functions)]
-#![feature(asm_const)]
 #![feature(str_from_raw_parts)]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
 #![deny(

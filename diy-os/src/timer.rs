@@ -12,9 +12,9 @@ pub fn setup_system_timer() {
 
     pit.mode_port.write(configure_command);
 
-    let reaload_value = pit::get_reload_value_from_frequency(100);
+    let divider = unsafe { pit::Pit::frequency_divder_from_frequency_unchecked(100) };
 
-    pit::set_count(&mut pit, reaload_value);
+    pit.set_frequency_divder(divider);
 }
 
 /// time in ms

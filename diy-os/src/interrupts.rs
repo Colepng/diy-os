@@ -1,4 +1,3 @@
-use alloc::slice;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use x86_64::{
@@ -36,7 +35,11 @@ lazy_static! {
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
             idt[0x80]
-                .set_handler_addr(VirtAddr::new(syscalls::system_call_handler_wrapper as u64))
+                .set_handler_addr(VirtAddr::new(
+                    (syscalls::system_call_handler_wrapper as usize)
+                        .try_into()
+                        .unwrap(),
+                ))
                 .set_privilege_level(x86_64::PrivilegeLevel::Ring3)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
@@ -52,6 +55,7 @@ pub fn unmask() {
     unsafe { PICS.acquire().write_masks(0b1111_1100, 0b1111_1111) };
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
     panic!(
         "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex {:x}",

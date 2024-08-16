@@ -1,9 +1,5 @@
-use core::{
-    ffi::{c_char, c_uchar},
-    fmt::write,
-};
-
 use alloc::{slice, vec::Vec};
+use core::ffi::{c_char, c_uchar};
 
 pub struct Ustar {
     ptr: *mut MetaData,
@@ -16,9 +12,9 @@ impl Ustar {
     ///
     /// # Safety
     /// Caller must make that the addr is valid
-    pub unsafe fn new(addr: u64) -> Self {
+    pub unsafe fn new(addr: usize) -> Self {
         Self {
-            ptr: core::ptr::with_exposed_provenance_mut::<MetaData>(addr as usize),
+            ptr: core::ptr::with_exposed_provenance_mut::<MetaData>(addr),
         }
     }
 
@@ -28,7 +24,7 @@ impl Ustar {
         let mut ptr = self.ptr;
         loop {
             // if the next 2 block are empty exit
-            if unsafe { slice::from_raw_parts(ptr as *const u8, 1024) }
+            if unsafe { slice::from_raw_parts(ptr as *const u8, (Self::BLOCK_SIZE * 2).into()) }
                 .iter()
                 .all(|x| *x == 0)
             {
@@ -45,7 +41,7 @@ impl Ustar {
             };
 
             if has_data {
-                let data = unsafe { &mut *(ptr.offset(1) as *mut Data) };
+                let data = unsafe { &mut *(ptr.offset(1).cast::<Data>()) };
 
                 file.data = Some(data);
 
@@ -57,7 +53,7 @@ impl Ustar {
             files.push(file);
         }
 
-        return files;
+        files
     }
 }
 
@@ -93,10 +89,10 @@ impl MetaData {
             }
 
             result *= 8;
-            result += (i - b'0') as u32;
+            result += u32::from(i - b'0');
         }
 
-        return result;
+        result
     }
 }
 
@@ -116,16 +112,12 @@ pub enum FileType {
 }
 
 pub struct File {
-    inode: &'static mut MetaData,
+    pub inode: &'static mut MetaData,
     data: Option<&'static mut Data>,
 }
 
 impl File {
     pub fn get_raw_bytes(&self) -> Option<&[u8; 512]> {
-        if let Some(data) = &self.data {
-            Some(&data.bytes)
-        } else {
-            return None;
-        }
+        self.data.as_ref().map(|data| &data.bytes)
     }
 }

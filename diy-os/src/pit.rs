@@ -16,6 +16,8 @@ pub struct Pit {
 }
 
 impl Pit {
+    const FREQUENCY: u32 = 1_193_182;
+
     const fn new() -> Self {
         Self {
             channel_0_port: ChannelPort(Port::new(0x40)),
@@ -35,6 +37,23 @@ impl Pit {
 
     pub fn give_back(_: Self) {
         unsafe { PIT_TAKEN = false }
+    }
+
+    /// # Safety
+    /// Caller must make sure `frequency` is inside the possible range frequencies
+    /// Min of `19hz`
+    /// Max of `1_192_182hz`
+    pub const unsafe fn frequency_divder_from_frequency_unchecked(frequency: u32) -> u16 {
+        (Self::FREQUENCY / frequency) as u16
+    }
+
+    pub fn set_frequency_divder(&mut self, divider: u16) {
+        x86_64::instructions::interrupts::without_interrupts(|| {
+            self.channel_0_port
+                .write((divider & 0xFF).try_into().unwrap()); // low_byte
+            self.channel_0_port
+                .write(((divider & 0xFF00) >> 8).try_into().unwrap()); // high byte
+        });
     }
 }
 
@@ -367,18 +386,4 @@ impl From<BcdBinaryMode> for u8 {
     fn from(value: BcdBinaryMode) -> Self {
         value.to_u8()
     }
-}
-
-pub fn get_reload_value_from_frequency(frequency: u32) -> u16 {
-    u16::try_from(1_192_182 / frequency).unwrap()
-}
-
-pub fn set_count(pit: &mut Pit, count: u16) -> &mut Pit {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        pit.channel_0_port.write((count & 0xFF).try_into().unwrap()); // low_byte
-        pit.channel_0_port
-            .write(((count & 0xFF00) >> 8).try_into().unwrap()); // high byte
-    });
-
-    pit
 }

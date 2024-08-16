@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use core::arch::asm;
 
 /// Parameters to functions are passed in the registers rdi, rsi, rdx, rcx, r8, r9, and further

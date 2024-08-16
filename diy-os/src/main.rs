@@ -3,7 +3,6 @@
 #![feature(optimize_attribute)]
 #![feature(custom_test_frameworks)]
 #![feature(naked_functions)]
-#![feature(asm_const)]
 #![feature(pointer_is_aligned_to)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
@@ -23,18 +22,15 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
-use core::{ptr, slice};
 use diy_os::{
-    allocator::{self, fixed_size_block}, elf,
-    filesystem::{self, ustar},
+    allocator::{self},
+    elf,
+    filesystem::ustar,
     hlt_loop, init,
     memory::{self, BootInfoFrameAllocator},
     println,
 };
-use x86_64::{
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
-    VirtAddr,
-};
+use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -60,12 +56,12 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
     allocator::setup_heap(&mut mapper, &mut frame_allocator).expect("Failed to setup heap fuck u");
 
     let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
-    let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr) };
+    let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into().unwrap()) };
 
     println!("Hello, world!");
 
     let elf_file = &ramdisk.get_files()[0];
-    
+
     let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
 
     hlt_loop();
@@ -73,10 +69,14 @@ extern "Rust" fn main(mut boot_info: &'static mut BootInfo) -> ! {
 
 #[repr(u8)]
 enum ExitCode {
-    Successful = 0
+    Successful = 0,
 }
 
-fn load_elf_and_jump_into_it(file: &ustar::File, mapper: &mut impl Mapper<Size4KiB>, frame_allocator: &mut impl FrameAllocator<Size4KiB> ) -> Result<ExitCode, u8> {
+fn load_elf_and_jump_into_it(
+    file: &ustar::File,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> Result<ExitCode, u8> {
     let file_ptr = file.get_raw_bytes().unwrap().as_ptr();
     let elf_header = unsafe { &*file_ptr.cast::<elf::Header>() };
 
@@ -92,18 +92,27 @@ fn load_elf_and_jump_into_it(file: &ustar::File, mapper: &mut impl Mapper<Size4K
 
     let ph_virtaddr = program_header.virtual_address;
 
-    println!("check alignment {}", program_header.virtual_address.as_u64() % program_header.alignment);
+    println!(
+        "check alignment {}",
+        program_header.virtual_address.as_u64() % program_header.alignment
+    );
 
     let page_for_load: Page<Size4KiB> = Page::containing_address(ph_virtaddr);
 
     // Has to be writable to write the load segment to the page in the first place
-    let flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE; //| PageTableFlags::
-                                                                                                                                 //
-    let frame = frame_allocator.allocate_frame().unwrap(); 
+    let flags = PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::PRESENT
+        | PageTableFlags::NO_CACHE; //| PageTableFlags::
+                                    //
+    let frame = frame_allocator.allocate_frame().unwrap();
 
     // Setup page for load
     unsafe {
-        mapper.map_to_with_table_flags(page_for_load, frame, flags, flags, frame_allocator).unwrap().flush();
+        mapper
+            .map_to_with_table_flags(page_for_load, frame, flags, flags, frame_allocator)
+            .unwrap()
+            .flush();
     }
 
     unsafe {
@@ -123,21 +132,36 @@ fn load_elf_and_jump_into_it(file: &ustar::File, mapper: &mut impl Mapper<Size4K
 
     // Setup page for stack
     let page_stack: Page<Size4KiB> = Page::containing_address(ph_virtaddr + 0x2000);
-    let stack_flags = PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::NO_CACHE;
+    let stack_flags = PageTableFlags::USER_ACCESSIBLE
+        | PageTableFlags::WRITABLE
+        | PageTableFlags::PRESENT
+        | PageTableFlags::NO_CACHE;
     let stack_frame = frame_allocator.allocate_frame().unwrap();
 
     // map page for stack
     unsafe {
-        mapper.map_to_with_table_flags(page_stack, stack_frame, stack_flags, stack_flags, frame_allocator).unwrap().flush();
+        mapper
+            .map_to_with_table_flags(
+                page_stack,
+                stack_frame,
+                stack_flags,
+                stack_flags,
+                frame_allocator,
+            )
+            .unwrap()
+            .flush();
     }
 
-    diy_os::usermode::into_usermode(program_header.virtual_address.as_u64(), page_stack.start_address().as_u64() + 0x1000);
+    diy_os::usermode::into_usermode(
+        program_header.virtual_address.as_u64(),
+        page_stack.start_address().as_u64() + 0x1000,
+    );
 
     Ok(ExitCode::Successful)
 }
 
 /// This function is called on panic.
-    #[cfg(not(test))] // new attribute
+#[cfg(not(test))] // new attribute
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);

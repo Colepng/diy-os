@@ -5,7 +5,7 @@ use crate::{
     },
     spinlock::Spinlock,
 };
-use core::{fmt::Write, usize};
+use core::fmt::Write;
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 

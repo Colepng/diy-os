@@ -1,6 +1,6 @@
 use x86_64::{PhysAddr, VirtAddr};
 
-/// Implementation based off of https://uclibc.org/docs/elf-64-gen.pdf and https://wiki.osdev.org/ELF
+/// Implementation based off of <https://uclibc.org/docs/elf-64-gen.pdf> and <https://wiki.osdev.org/ELF>
 
 #[derive(Debug)]
 #[repr(C)]
@@ -29,7 +29,7 @@ pub struct Header {
     /// Contains the number of entries in the section header table
     pub section_header_entry_count: u16,
     /// Contains the section header table index of the section containing the section name string
-    /// table. If there is no section name string table, this field has the value SHN_UNDEF.
+    /// table. If there is no section name string table, this field has the value `SHN_UNDEF`.
     pub section_header_section_name_index: u16,
 }
 
@@ -93,8 +93,8 @@ pub enum ObjectType {
     HighProc = 0xffff,
 }
 
-/// Combination of the https://wiki.osdev.org/ELF instruction set archtecits table and the
-/// e_machine table on section 1-4 of http://www.skyfree.org/linux/references/ELF_Format.pdf
+/// Combination of the <https://wiki.osdev.org/ELF> instruction set archtecits table and the
+/// `e_machine` table on section 1-4 of <http://www.skyfree.org/linux/references/ELF_Format.pdf>
 /// Identifies the target architecture
 #[derive(Debug)]
 #[repr(u16)]
@@ -148,13 +148,13 @@ pub enum SegmentType {
     SharedLib = 5,
     ProgramHeaderTable = 6,
     /// Environment-specific use
-    LoOs = 0x60000000,
+    LoOs = 0x6000_0000,
     /// Environment-specific use
-    HiOs = 0x6fffffff,
+    HiOs = 0x6fff_ffff,
     /// Processor-specific use
-    LoProc = 0x70000000,
+    LoProc = 0x7000_0000,
     /// Processor-specific use
-    HiProc = 0x7fffffff,
+    HiProc = 0x7fff_ffff,
 }
 
 #[derive(Debug, Clone, Copy)]
