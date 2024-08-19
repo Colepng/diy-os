@@ -6,7 +6,7 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{gdt, pit, println, ps2::controllers::PS2Controller, syscalls};
+use crate::{gdt, pit, println, syscalls};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;

@@ -1,6 +1,6 @@
 use crate::spinlock::Spinlock;
-use controllers::gernaric::Generic;
+pub use controller::controllers::generic::GenericPS2Controller;
 
-pub mod controllers;
+pub mod controller;
 
-pub static CONTROLLER: Spinlock<Option<Generic>> = Spinlock::new(None);
+pub static CONTROLLER: Spinlock<Option<GenericPS2Controller>> = Spinlock::new(None);

@@ -1,9 +1,5 @@
-use crate::ps2::controllers::DataPort;
-use crate::ps2::controllers::StatusRegister;
-
-use super::BufferStatus;
-use super::CommandRegister;
-use super::PS2Controller;
+use crate::ps2::controller::{BufferStatus, Command, CommandWithResponse, PS2Controller, PS2ControllerReadError, PS2ControllerSendError, StatusByte};
+use crate::ps2::controller::{CommandRegister, DataPort, StatusRegister};
 
 pub struct GenericPS2Controller {
     data_port: DataPort,
@@ -22,32 +18,32 @@ impl GenericPS2Controller {
 }
 
 impl PS2Controller for GenericPS2Controller {
-    fn send_byte(&mut self, value: u8) -> Result<(), super::PS2ControllerSendError> {
+    fn send_byte(&mut self, value: u8) -> Result<(), PS2ControllerSendError> {
         match self.status_register.read().get_input_buffer_status() {
             BufferStatus::Empty => {
                 self.data_port.write(value);
                 Ok(())
             }
-            BufferStatus::Full => Err(super::PS2ControllerSendError::InputBufferFull),
+            BufferStatus::Full => Err(PS2ControllerSendError::InputBufferFull),
         }
     }
 
-    fn read_byte(&mut self) -> Result<u8, super::PS2ControllerReadError> {
+    fn read_byte(&mut self) -> Result<u8, PS2ControllerReadError> {
         match self.status_register.read().get_output_buffer_status() {
             BufferStatus::Full => Ok(self.data_port.read()),
-            BufferStatus::Empty => Err(super::PS2ControllerReadError::OutputBufferEmpty),
+            BufferStatus::Empty => Err(PS2ControllerReadError::OutputBufferEmpty),
         }
     }
 
-    fn read_status_byte(&mut self) -> super::StatusByte {
+    fn read_status_byte(&mut self) -> StatusByte {
         self.status_register.read()
     }
 
-    fn send_command<C: super::Command>(&mut self, command: C) {
+    fn send_command<C: Command>(&mut self, command: C) {
         self.command_register.send_command(command);
     }
 
-    fn send_command_with_response<C: super::CommandWithResponse>(
+    fn send_command_with_response<C: CommandWithResponse>(
         &mut self,
         command: C,
     ) -> C::Response {

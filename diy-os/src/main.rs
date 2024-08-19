@@ -23,11 +23,7 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
-use diy_os::ps2::controllers::{
-    gernaric::Generic, ConfigurationByte, EnableSecondPort, EnabledOrDisabled, PS2Controller,
-    ReadConfigurationByte, WriteConfigurationByte,
-};
-use diy_os::{elf, filesystem::ustar, hlt_loop, init, println};
+use diy_os::{elf, filesystem::ustar, hlt_loop, init, println, ps2::{controller::PS2Controller, GenericPS2Controller}};
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -59,7 +55,7 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     let elf_file = &ramdisk.get_files()[0];
 
-    let mut gernaric = Generic::new();
+    let mut gernaric = GenericPS2Controller::new();
 
     gernaric.initialize();
 
