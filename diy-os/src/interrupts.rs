@@ -6,7 +6,7 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{gdt, pit, println, syscalls};
+use crate::{gdt, pit, println, ps2::controllers::PS2Controller, syscalls};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -52,7 +52,7 @@ pub fn init_idt() {
 }
 
 pub fn unmask() {
-    unsafe { PICS.acquire().write_masks(0b1111_1100, 0b1111_1111) };
+    unsafe { PICS.acquire().write_masks(0b1111_1000, 0b1111_1111) };
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -112,6 +112,17 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
+    // println!("key press");
+    //
+    // {
+    //     let mut con = crate::ps2::CONTROLLER.acquire();
+    //
+    //     match con.as_mut() {
+    //         Some(controller) => println!("code: {}", controller.read_byte().unwrap()),
+    //         None => {}
+    //     }
+    // }
+
     unsafe {
         PICS.acquire()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());

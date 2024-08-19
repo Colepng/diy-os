@@ -23,6 +23,10 @@ use bootloader_api::{
     entry_point, BootInfo, BootloaderConfig,
 };
 use core::panic::PanicInfo;
+use diy_os::ps2::controllers::{
+    gernaric::Generic, ConfigurationByte, EnableSecondPort, EnabledOrDisabled, PS2Controller,
+    ReadConfigurationByte, WriteConfigurationByte,
+};
 use diy_os::{elf, filesystem::ustar, hlt_loop, init, println};
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
@@ -46,7 +50,7 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 
 #[no_mangle]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
-    let (boot_info, _frame_allocator, _mapper) = init(boot_info, 10)?;
+    let (boot_info, _frame_allocator, _mapper) = init(boot_info, 100)?;
 
     let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
     let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into()?) };
@@ -54,6 +58,14 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     println!("Hello, world!");
 
     let elf_file = &ramdisk.get_files()[0];
+
+    let mut gernaric = Generic::new();
+
+    gernaric.initialize();
+
+    {
+        diy_os::ps2::CONTROLLER.acquire().replace(gernaric);
+    }
 
     // let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
 
