@@ -1,4 +1,6 @@
-use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
+use x86_64::instructions::
+    port::{Port, PortReadOnly, PortWriteOnly}
+;
 
 pub mod gernaric;
 
@@ -18,6 +20,8 @@ pub trait PS2Controller {
         self.send_command(DisableSecondPort);
 
         let _ = self.read_byte();
+
+        let config = self.send_command_with_response(ReadByte0);
     }
 }
 
@@ -519,15 +523,23 @@ impl ConfigurationByte {
     }
 
     pub fn get_first_port_interrupt(&self) -> EnabledOrDisabled {
-        ((self.0 & (1 << 0)) != 0).into()
+        EnabledOrDisabled::from(self.0 & (1 << 0))
+    }
+
+    pub fn set_first_port_interrupt(&mut self, value: EnabledOrDisabled) {
+        self.0 |= u8::from(value) << 0;
     }
 
     pub fn get_second_port_interrupt(&self) -> EnabledOrDisabled {
-        ((self.0 & (1 << 1)) != 0).into()
+        EnabledOrDisabled::from(self.0 & (1 << 1))
+    }
+
+    pub fn set_second_port_interrupt(&mut self, value: EnabledOrDisabled) {
+        self.0 |= u8::from(value) << 1;
     }
 
     pub fn get_system_flag(&self) -> SystemFlag {
-        ((self.0 & (1 << 2)) != 0).into()
+        SystemFlag::from(self.0 & (1 << 2) != 0)
     }
 
     pub fn get_should_be_zero(&self) -> bool {
@@ -535,16 +547,29 @@ impl ConfigurationByte {
     }
 
     pub fn get_first_port_clock(&self) -> EnabledOrDisabled {
-        (!((self.0 & (1 << 4)) != 0)).into()
+        !EnabledOrDisabled::from(self.0 & (1 << 4))
+    }
+
+    pub fn set_first_port_clock(&mut self, value: EnabledOrDisabled) {
+        self.0 |= u8::from(!value) << 4;
     }
 
     pub fn get_second_port_clock(&self) -> EnabledOrDisabled {
-        (!((self.0 & (1 << 5)) != 0)).into()
+        !EnabledOrDisabled::from(self.0 & (1 << 5))
+    }
+
+    pub fn set_second_port_clock(&mut self, value: EnabledOrDisabled) {
+        self.0 |= u8::from(!value) << 5;
     }
 
     pub fn get_first_port_translation(&self) -> EnabledOrDisabled {
-        ((self.0 & (1 << 6)) != 0).into()
+        EnabledOrDisabled::from(self.0 & (1 << 6))
     }
+
+    pub fn set_first_port_translation(&mut self, value: EnabledOrDisabled) {
+        self.0 |= u8::from(value) << 6;
+    }
+
     pub fn get_must_be_zero(&self) -> bool {
         (self.0 & (1 << 7)) != 0
     }
@@ -576,10 +601,33 @@ pub enum EnabledOrDisabled {
     Enabled = 1,
 }
 
-impl From<bool> for EnabledOrDisabled {
-    fn from(value: bool) -> Self {
-        // Safety: Safe to transmute between bool and EnableOrDisabled
-        // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, EnabledOrDisabled>(value) }
+impl core::ops::Not for EnabledOrDisabled {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            EnabledOrDisabled::Disabled => EnabledOrDisabled::Enabled,
+            EnabledOrDisabled::Enabled => EnabledOrDisabled::Disabled,
+        }
+    }
+}
+
+impl From<u8> for EnabledOrDisabled {
+    fn from(value: u8) -> Self {
+        if value == 0 {
+            Self::Disabled
+        } else {
+            Self::Enabled
+        }
+    }
+}
+
+/// TODO: should make this bool so lets say a 3 can never be represented
+impl From<EnabledOrDisabled> for u8 {
+    fn from(value: EnabledOrDisabled) -> Self {
+        match value {
+            EnabledOrDisabled::Disabled => 0,
+            EnabledOrDisabled::Enabled => 1,
+        }
     }
 }
