@@ -16,7 +16,14 @@
 #![feature(layout_for_ptr)]
 #![feature(naked_functions)]
 #![feature(str_from_raw_parts)]
-#![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
+#![warn(
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::perf,
+    clippy::style,
+    clippy::todo,
+    clippy::undocumented_unsafe_blocks
+)]
 #![deny(
     clippy::suspicious,
     clippy::correctness,
@@ -51,6 +58,7 @@ pub mod gdt;
 pub mod interrupts;
 pub mod memory;
 pub mod pit;
+pub mod ps2;
 pub mod serial;
 pub mod spinlock;
 pub mod syscalls;
