@@ -1,5 +1,4 @@
-use crate::ps2::controller::responses::EnabledOrDisabled;
-use crate::ps2::controller::responses::PortTestResult;
+use crate::{println, ps2::GenericPS2Controller};
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 
 pub mod commands;
@@ -14,79 +13,204 @@ pub trait CommandWithResponse: Into<u8> {
 
 pub trait Response: From<u8> {}
 
-pub struct State;
+trait State {}
 
-pub trait PS2Controller: PS2ControllerInternal {
-    fn send_byte(&mut self, value: u8) -> Result<(), PS2ControllerSendError>;
+pub struct Waiting;
+impl State for Waiting {}
 
-    fn read_byte(&mut self) -> Result<u8, PS2ControllerReadError>;
+pub trait WaitingTrait {
+    type Output: PollingOutputTrait;
+    type Input: PollingInputTrait;
 
-    fn initialize(&mut self) {
-        self.send_command(commands::DisableFirstPort);
-        self.send_command(commands::DisableSecondPort);
+    fn poll_output(self) -> Self::Output;
+    fn poll_input(self) -> Self::Input;
 
-        let _ = self.read_byte();
+    unsafe fn reset_chain<I: WaitingTrait>(self) -> I;
+}
 
-        let mut config = self.send_command_with_response(commands::ReadConfigurationByte);
+pub struct PollingOutput;
+impl State for PollingOutput {}
 
-        config.set_first_port_interrupt(EnabledOrDisabled::Disabled);
-        config.set_first_port_translation(EnabledOrDisabled::Disabled);
-        config.set_first_port_clock(EnabledOrDisabled::Enabled);
+pub trait PollingOutputTrait {
+    type Ready: ReadyToReadTrait;
 
-        self.send_command(commands::WriteConfigurationByte);
-        self.send_byte(config.0).unwrap();
+    fn block_until_ready(self) -> Self::Ready;
 
-        let result = self.send_command_with_response(commands::TestController);
+    fn is_ready(&mut self) -> bool;
+}
+pub struct ReadyToRead;
+impl State for ReadyToRead {}
 
-        self.send_command(commands::WriteConfigurationByte);
-        self.send_byte(config.0).unwrap();
+pub trait ReadyToReadTrait {
+    type Inital: WaitingTrait;
 
-        // Determine 2 channels
-        self.send_command(commands::EnableSecondPort);
-        config = self.send_command_with_response(commands::ReadConfigurationByte);
+    fn read(self) -> (Self::Inital, u8);
+}
 
-        let is_2_ports = match config.get_second_port_clock() {
-            EnabledOrDisabled::Disabled => false,
-            EnabledOrDisabled::Enabled => true,
+pub struct PollingInput;
+impl State for PollingInput {}
+pub trait PollingInputTrait {}
+
+pub trait ControllerMarker: WaitingTrait {
+    fn initialize(self)
+    where
+        Self: Sized,
+    {
+        let controller = self;
+
+        let (controller, byte) = controller.poll_output().block_until_ready().read();
+
+        let mut controller = controller.poll_output();
+
+        let controller = if controller.is_ready() {
+            println!("controller can read");
+            
+            controller.block_until_ready()
+        } else {
+            println!("controller can't read waiting");
+
+            controller.block_until_ready()
         };
 
-        if is_2_ports {
-            self.send_command(commands::DisableSecondPort);
-            config.set_second_port_interrupt(EnabledOrDisabled::Disabled);
-            config.set_second_port_clock(EnabledOrDisabled::Enabled);
+        let (controller, result) = controller.read();
 
-            self.send_command(commands::WriteConfigurationByte);
-            self.send_byte(config.0).unwrap();
-        }
+        // Possible to reset chain to get read of massive type but not suggested
+        let a: Self = unsafe { controller.reset_chain() };
 
-        match self.send_command_with_response(commands::TestFirstPort) {
-            PortTestResult::Passed => {
-                self.send_command(commands::EnableFirstPort);
-                config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
-            }
-            _ => {}
-        }
+        a.poll_output().block_until_ready().poll_output();
 
-        match self.send_command_with_response(commands::TestSecondPort) {
-            PortTestResult::Passed => {
-                self.send_command(commands::EnableSecondPort);
-                config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
-            }
-            _ => {}
-        }
+        println!("read: {:X}", result);
 
-        self.send_command(commands::WriteConfigurationByte);
-        self.send_byte(config.0).unwrap();
+
+        // self.send_command(commands::DisableFirstPort);
+        // self.send_command(commands::DisableSecondPort);
+        //
+        // let _ = self.read_byte();
+        //
+        // let mut config = self.send_command_with_response(commands::ReadConfigurationByte);
+        //
+        // config.set_first_port_interrupt(EnabledOrDisabled::Disabled);
+        // config.set_first_port_translation(EnabledOrDisabled::Disabled);
+        // config.set_first_port_clock(EnabledOrDisabled::Enabled);
+        //
+        // self.send_command(commands::WriteConfigurationByte);
+        // self.send_byte(config.0).unwrap();
+        //
+        // let result = self.send_command_with_response(commands::TestController);
+        //
+        // self.send_command(commands::WriteConfigurationByte);
+        // self.send_byte(config.0).unwrap();
+        //
+        // // Determine 2 channels
+        // self.send_command(commands::EnableSecondPort);
+        // config = self.send_command_with_response(commands::ReadConfigurationByte);
+        //
+        // let is_2_ports = match config.get_second_port_clock() {
+        //     EnabledOrDisabled::Disabled => false,
+        //     EnabledOrDisabled::Enabled => true,
+        // };
+        //
+        // if is_2_ports {
+        //     self.send_command(commands::DisableSecondPort);
+        //     config.set_second_port_interrupt(EnabledOrDisabled::Disabled);
+        //     config.set_second_port_clock(EnabledOrDisabled::Enabled);
+        //
+        //     self.send_command(commands::WriteConfigurationByte);
+        //     self.send_byte(config.0).unwrap();
+        // }
+        //
+        // match self.send_command_with_response(commands::TestFirstPort) {
+        //     PortTestResult::Passed => {
+        //         self.send_command(commands::EnableFirstPort);
+        //         config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
+        //     }
+        //     _ => {}
+        // }
+        //
+        // match self.send_command_with_response(commands::TestSecondPort) {
+        //     PortTestResult::Passed => {
+        //         self.send_command(commands::EnableSecondPort);
+        //         config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
+        //     }
+        //     _ => {}
+        // }
+        //
+        // self.send_command(commands::WriteConfigurationByte);
+        // self.send_byte(config.0).unwrap();
     }
 }
 
-trait PS2ControllerInternal {
-    fn send_command<C: Command>(&mut self, command: C);
-
-    fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
-
-    fn read_status_byte(&mut self) -> StatusByte;
-}
+// pub trait PS2Controller: PS2ControllerInternal {
+//     fn send_byte(&mut self, value: u8) -> Result<(), PS2ControllerSendError>;
+//
+//     fn read_byte(&mut self) -> Result<u8, PS2ControllerReadError>;
+//
+//     fn initialize(&mut self) {
+//         self.send_command(commands::DisableFirstPort);
+//         self.send_command(commands::DisableSecondPort);
+//
+//         let _ = self.read_byte();
+//
+//         let mut config = self.send_command_with_response(commands::ReadConfigurationByte);
+//
+//         config.set_first_port_interrupt(EnabledOrDisabled::Disabled);
+//         config.set_first_port_translation(EnabledOrDisabled::Disabled);
+//         config.set_first_port_clock(EnabledOrDisabled::Enabled);
+//
+//         self.send_command(commands::WriteConfigurationByte);
+//         self.send_byte(config.0).unwrap();
+//
+//         let result = self.send_command_with_response(commands::TestController);
+//
+//         self.send_command(commands::WriteConfigurationByte);
+//         self.send_byte(config.0).unwrap();
+//
+//         // Determine 2 channels
+//         self.send_command(commands::EnableSecondPort);
+//         config = self.send_command_with_response(commands::ReadConfigurationByte);
+//
+//         let is_2_ports = match config.get_second_port_clock() {
+//             EnabledOrDisabled::Disabled => false,
+//             EnabledOrDisabled::Enabled => true,
+//         };
+//
+//         if is_2_ports {
+//             self.send_command(commands::DisableSecondPort);
+//             config.set_second_port_interrupt(EnabledOrDisabled::Disabled);
+//             config.set_second_port_clock(EnabledOrDisabled::Enabled);
+//
+//             self.send_command(commands::WriteConfigurationByte);
+//             self.send_byte(config.0).unwrap();
+//         }
+//
+//         match self.send_command_with_response(commands::TestFirstPort) {
+//             PortTestResult::Passed => {
+//                 self.send_command(commands::EnableFirstPort);
+//                 config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
+//             }
+//             _ => {}
+//         }
+//
+//         match self.send_command_with_response(commands::TestSecondPort) {
+//             PortTestResult::Passed => {
+//                 self.send_command(commands::EnableSecondPort);
+//                 config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
+//             }
+//             _ => {}
+//         }
+//
+//         self.send_command(commands::WriteConfigurationByte);
+//         self.send_byte(config.0).unwrap();
+//     }
+// }
+//
+// trait PS2ControllerInternal {
+//     fn send_command<C: Command>(&mut self, command: C);
+//
+//     fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
+//
+//     fn read_status_byte(&mut self) -> StatusByte;
+// }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PS2ControllerReadError {
@@ -195,6 +319,7 @@ pub struct Status {
 
 #[derive(Debug)]
 #[repr(u8)]
+#[derive(PartialEq)]
 pub enum BufferStatus {
     Empty = 0,
     Full = 1,

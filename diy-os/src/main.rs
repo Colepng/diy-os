@@ -27,7 +27,10 @@ use diy_os::{
     elf,
     filesystem::ustar,
     hlt_loop, init, println,
-    ps2::{controller::PS2Controller, GenericPS2Controller},
+    ps2::{
+        controller::{ControllerMarker, PS2Controller},
+        GenericPS2Controller,
+    },
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
