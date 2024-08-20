@@ -14,16 +14,12 @@ pub trait CommandWithResponse: Into<u8> {
 
 pub trait Response: From<u8> {}
 
-pub trait PS2Controller {
+pub struct State;
+
+pub trait PS2Controller: PS2ControllerInternal {
     fn send_byte(&mut self, value: u8) -> Result<(), PS2ControllerSendError>;
 
-    fn send_command<C: Command>(&mut self, command: C);
-
-    fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
-
     fn read_byte(&mut self) -> Result<u8, PS2ControllerReadError>;
-
-    fn read_status_byte(&mut self) -> StatusByte;
 
     fn initialize(&mut self) {
         self.send_command(commands::DisableFirstPort);
@@ -84,6 +80,15 @@ pub trait PS2Controller {
         self.send_command(commands::WriteConfigurationByte);
         self.send_byte(config.0).unwrap();
     }
+}
+
+trait PS2ControllerInternal {
+    fn send_command<C: Command>(&mut self, command: C);
+
+    fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
+
+    fn read_status_byte(&mut self) -> StatusByte;
+
 }
 
 #[derive(thiserror::Error, Debug)]

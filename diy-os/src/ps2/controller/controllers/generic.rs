@@ -1,4 +1,4 @@
-use crate::ps2::controller::{BufferStatus, Command, CommandWithResponse, PS2Controller, PS2ControllerReadError, PS2ControllerSendError, StatusByte};
+use crate::ps2::controller::{BufferStatus, Command, CommandWithResponse, PS2Controller, PS2ControllerInternal, PS2ControllerReadError, PS2ControllerSendError, StatusByte};
 use crate::ps2::controller::{CommandRegister, DataPort, StatusRegister};
 
 pub struct GenericPS2Controller {
@@ -14,6 +14,25 @@ impl GenericPS2Controller {
             status_register: StatusRegister::new(),
             command_register: CommandRegister::new(),
         }
+    }
+}
+
+impl PS2ControllerInternal for GenericPS2Controller {
+    fn send_command<C: Command>(&mut self, command: C) {
+        self.command_register.send_command(command);
+    }
+
+    fn send_command_with_response<C: CommandWithResponse>(
+        &mut self,
+        command: C,
+    ) -> C::Response {
+        self.command_register.send_command_with_response(command);
+
+        C::Response::from(self.data_port.read())
+    }
+
+    fn read_status_byte(&mut self) -> StatusByte {
+        self.status_register.read()
     }
 }
 
@@ -33,22 +52,5 @@ impl PS2Controller for GenericPS2Controller {
             BufferStatus::Full => Ok(self.data_port.read()),
             BufferStatus::Empty => Err(PS2ControllerReadError::OutputBufferEmpty),
         }
-    }
-
-    fn read_status_byte(&mut self) -> StatusByte {
-        self.status_register.read()
-    }
-
-    fn send_command<C: Command>(&mut self, command: C) {
-        self.command_register.send_command(command);
-    }
-
-    fn send_command_with_response<C: CommandWithResponse>(
-        &mut self,
-        command: C,
-    ) -> C::Response {
-        self.command_register.send_command_with_response(command);
-
-        C::Response::from(self.data_port.read())
     }
 }
