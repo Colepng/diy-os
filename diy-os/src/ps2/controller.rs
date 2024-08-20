@@ -1,9 +1,9 @@
-use crate::ps2::controller::responses::PortTestResult;
 use crate::ps2::controller::responses::EnabledOrDisabled;
+use crate::ps2::controller::responses::PortTestResult;
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 
-pub mod controllers;
 pub mod commands;
+pub mod controllers;
 pub mod responses;
 
 pub trait Command: Into<u8> {}
@@ -63,18 +63,16 @@ pub trait PS2Controller: PS2ControllerInternal {
             PortTestResult::Passed => {
                 self.send_command(commands::EnableFirstPort);
                 config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
-            },
-            _ => {
             }
+            _ => {}
         }
 
         match self.send_command_with_response(commands::TestSecondPort) {
             PortTestResult::Passed => {
                 self.send_command(commands::EnableSecondPort);
                 config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
-            },
-            _ => {
             }
+            _ => {}
         }
 
         self.send_command(commands::WriteConfigurationByte);
@@ -88,7 +86,6 @@ trait PS2ControllerInternal {
     fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
 
     fn read_status_byte(&mut self) -> StatusByte;
-
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -257,4 +254,3 @@ impl CommandRegister {
         unsafe { self.0.write(command.into()) }
     }
 }
-

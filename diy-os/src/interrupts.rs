@@ -116,7 +116,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     //
     {
         let mut con = crate::ps2::CONTROLLER.acquire();
-    
+
         match con.as_mut() {
             Some(controller) => println!("{:X}", controller.read_byte().unwrap()),
             None => {}

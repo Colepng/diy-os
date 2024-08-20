@@ -96,7 +96,6 @@ impl From<u8> for ConfigurationByte {
     }
 }
 
-
 #[repr(transparent)]
 pub struct UnknownPurpose(pub u8);
 
@@ -142,7 +141,6 @@ impl From<u8> for ControllerTestResult {
 }
 
 impl Response for ControllerTestResult {}
-
 
 #[derive(Debug)]
 pub struct Config {
