@@ -45,14 +45,16 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 
 entry_point!(main_wrapper, config = &BOOTLOADER_CONFIG);
 
-#[no_mangle]
+// SAFETY: there is no other global function of this name
+#[unsafe(no_mangle)]
 extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
     match main(boot_info) {
         Err(err) => panic!("{err:?}"),
     }
 }
 
-#[no_mangle]
+// SAFETY: there is no other global function of this name
+#[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let (boot_info, _frame_allocator, _mapper) = init(boot_info, 100)?;
 
