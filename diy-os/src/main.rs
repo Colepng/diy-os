@@ -27,10 +27,7 @@ use diy_os::{
     elf,
     filesystem::ustar,
     hlt_loop, init, println,
-    ps2::{
-        controller::{ControllerMarker, PS2Controller},
-        GenericPS2Controller,
-    },
+    ps2::{controller::PS2Controller, GenericPS2Controller},
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
@@ -65,9 +62,9 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     let elf_file = &ramdisk.get_files()[0];
 
-    let mut gernaric = GenericPS2Controller::new();
+    let gernaric = GenericPS2Controller::new();
 
-    gernaric.initialize();
+    let gernaric = gernaric.initialize();
 
     {
         diy_os::ps2::CONTROLLER.acquire().replace(gernaric);

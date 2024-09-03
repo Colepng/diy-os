@@ -1,4 +1,4 @@
-use crate::{println, ps2::GenericPS2Controller};
+use responses::{ControllerTestResult, EnabledOrDisabled, PortTestResult};
 use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 
 pub mod commands;
@@ -15,128 +15,230 @@ pub trait Response: From<u8> {}
 
 trait State {}
 
-pub struct Waiting;
-impl State for Waiting {}
+pub struct Inital;
+impl State for Inital {}
 
-pub trait WaitingTrait {
-    type Output: PollingOutputTrait;
-    type Input: PollingInputTrait;
+pub trait InitalTrait: PS2ControllerInternal {
+    type Reader: WaitingToReadTrait<u8>;
+    type Writer: WaitingToWriteTrait;
 
-    fn poll_output(self) -> Self::Output;
-    fn poll_input(self) -> Self::Input;
+    fn as_reader(self) -> Self::Reader;
+    fn as_writer(self) -> Self::Writer;
 
-    unsafe fn reset_chain<I: WaitingTrait>(self) -> I;
+    unsafe fn reset_chain<I: InitalTrait>(self) -> I;
 }
 
-pub struct PollingOutput;
-impl State for PollingOutput {}
+#[derive(Debug)]
+pub struct WaitingToRead;
+impl State for WaitingToRead {}
 
-pub trait PollingOutputTrait {
-    type Ready: ReadyToReadTrait;
+pub trait WaitingToReadTrait<B: From<u8>> {
+    type Inital: InitalTrait;
+    type Ready: ReadyToReadTrait<B>;
 
     fn block_until_ready(self) -> Self::Ready;
 
+    fn try_read(self) -> Result<Self::Ready, Self>
+    where
+        Self: Sized;
+
     fn is_ready(&mut self) -> bool;
+
+    fn stop_waiting(self) -> Self::Inital;
 }
+
 pub struct ReadyToRead;
 impl State for ReadyToRead {}
 
-pub trait ReadyToReadTrait {
-    type Inital: WaitingTrait;
+pub trait ReadyToReadTrait<B: From<u8> = u8> {
+    type Inital: InitalTrait;
 
-    fn read(self) -> (Self::Inital, u8);
+    fn read(self) -> (Self::Inital, B);
 }
 
-pub struct PollingInput;
-impl State for PollingInput {}
-pub trait PollingInputTrait {}
+pub struct WaitingToWrite;
+impl State for WaitingToWrite {}
 
-pub trait ControllerMarker: WaitingTrait {
-    fn initialize(self)
+pub trait WaitingToWriteTrait {
+    type Ready: ReadyToWriteTrait;
+
+    fn block_until_ready(self) -> Self::Ready;
+
+    fn try_read(self) -> Result<Self::Ready, Self>
+    where
+        Self: Sized;
+
+    fn is_ready(&mut self) -> bool;
+}
+
+pub struct ReadyToWrite;
+impl State for ReadyToWrite {}
+
+pub trait ReadyToWriteTrait {
+    type Inital: InitalTrait;
+
+    fn write(self, value: u8) -> Self::Inital;
+}
+
+trait PS2ControllerInternal {
+    type CommandSender: CommandSenderTrait;
+    type CommandSenderWithResponse: CommandSenderWithResponseTrait;
+
+    fn into_command_sender(self) -> Self::CommandSender;
+    fn into_command_sender_with_response(self) -> Self::CommandSenderWithResponse;
+
+    fn read_status_byte(&mut self) -> StatusByte;
+}
+
+pub struct CommandSender;
+impl State for CommandSender {}
+
+pub trait CommandSenderTrait {
+    type Inital: InitalTrait;
+
+    fn send_command<C: Command>(self, command: C) -> Self::Inital;
+}
+
+pub struct CommandSenderWithResponse;
+impl State for CommandSenderWithResponse {}
+
+pub trait CommandSenderWithResponseTrait {
+    type Reader<B: Response>: WaitingToReadTrait<B>;
+
+    /// The result reader must be read from
+    fn send_command_with_response<C: CommandWithResponse>(
+        self,
+        command: C,
+    ) -> Self::Reader<C::Response>;
+}
+
+pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
+    fn initialize(self) -> Self
     where
         Self: Sized,
     {
         let controller = self;
 
-        let (controller, byte) = controller.poll_output().block_until_ready().read();
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::DisableFirstPort);
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::DisableSecondPort);
 
-        let mut controller = controller.poll_output();
-
-        let controller = if controller.is_ready() {
-            println!("controller can read");
-            
-            controller.block_until_ready()
-        } else {
-            println!("controller can't read waiting");
-
-            controller.block_until_ready()
+        let (controller, _) = match controller.as_reader().try_read() {
+            Ok(con) => con.read(),
+            Err(con) => (unsafe { con.stop_waiting().reset_chain() }, 0),
         };
 
-        let (controller, result) = controller.read();
+        let (controller, mut config) = controller
+            .into_command_sender_with_response()
+            .send_command_with_response(commands::ReadConfigurationByte)
+            .block_until_ready()
+            .read();
 
-        // Possible to reset chain to get read of massive type but not suggested
-        let a: Self = unsafe { controller.reset_chain() };
+        config.set_first_port_interrupt(EnabledOrDisabled::Disabled);
+        config.set_first_port_translation(EnabledOrDisabled::Disabled);
+        config.set_first_port_clock(EnabledOrDisabled::Enabled);
 
-        a.poll_output().block_until_ready().poll_output();
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::WriteConfigurationByte);
+        let controller = controller.as_writer().block_until_ready().write(config.0);
 
-        println!("read: {:X}", result);
+        let (controller, result) = controller
+            .into_command_sender_with_response()
+            .send_command_with_response(commands::TestController)
+            .block_until_ready()
+            .read();
 
+        match result {
+            ControllerTestResult::TestFailed => todo!("handle failed controller test"),
+            _ => {}
+        }
 
-        // self.send_command(commands::DisableFirstPort);
-        // self.send_command(commands::DisableSecondPort);
-        //
-        // let _ = self.read_byte();
-        //
-        // let mut config = self.send_command_with_response(commands::ReadConfigurationByte);
-        //
-        // config.set_first_port_interrupt(EnabledOrDisabled::Disabled);
-        // config.set_first_port_translation(EnabledOrDisabled::Disabled);
-        // config.set_first_port_clock(EnabledOrDisabled::Enabled);
-        //
-        // self.send_command(commands::WriteConfigurationByte);
-        // self.send_byte(config.0).unwrap();
-        //
-        // let result = self.send_command_with_response(commands::TestController);
-        //
-        // self.send_command(commands::WriteConfigurationByte);
-        // self.send_byte(config.0).unwrap();
-        //
-        // // Determine 2 channels
-        // self.send_command(commands::EnableSecondPort);
-        // config = self.send_command_with_response(commands::ReadConfigurationByte);
-        //
-        // let is_2_ports = match config.get_second_port_clock() {
-        //     EnabledOrDisabled::Disabled => false,
-        //     EnabledOrDisabled::Enabled => true,
-        // };
-        //
-        // if is_2_ports {
-        //     self.send_command(commands::DisableSecondPort);
-        //     config.set_second_port_interrupt(EnabledOrDisabled::Disabled);
-        //     config.set_second_port_clock(EnabledOrDisabled::Enabled);
-        //
-        //     self.send_command(commands::WriteConfigurationByte);
-        //     self.send_byte(config.0).unwrap();
-        // }
-        //
-        // match self.send_command_with_response(commands::TestFirstPort) {
-        //     PortTestResult::Passed => {
-        //         self.send_command(commands::EnableFirstPort);
-        //         config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
-        //     }
-        //     _ => {}
-        // }
-        //
-        // match self.send_command_with_response(commands::TestSecondPort) {
-        //     PortTestResult::Passed => {
-        //         self.send_command(commands::EnableSecondPort);
-        //         config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
-        //     }
-        //     _ => {}
-        // }
-        //
-        // self.send_command(commands::WriteConfigurationByte);
-        // self.send_byte(config.0).unwrap();
+        // Resend config because a controller test sometimes resets the config
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::WriteConfigurationByte);
+        let controller = controller.as_writer().block_until_ready().write(config.0);
+
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::EnableSecondPort);
+
+        let (controller, mut config) = controller
+            .into_command_sender_with_response()
+            .send_command_with_response(commands::ReadConfigurationByte)
+            .block_until_ready()
+            .read();
+
+        let is_2_ports = match config.get_second_port_clock() {
+            EnabledOrDisabled::Disabled => false,
+            EnabledOrDisabled::Enabled => true,
+        };
+
+        let controller = if is_2_ports {
+            let controller = controller
+                .into_command_sender()
+                .send_command(commands::DisableSecondPort);
+
+            config.set_second_port_interrupt(EnabledOrDisabled::Disabled);
+            config.set_second_port_clock(EnabledOrDisabled::Enabled);
+
+            let controller = controller
+                .into_command_sender()
+                .send_command(commands::WriteConfigurationByte);
+            let controller = controller.as_writer().block_until_ready().write(config.0);
+
+            // TODO: Improve method of "resetting the type"
+            unsafe { controller.reset_chain::<Self>() }
+        } else {
+            unsafe { controller.reset_chain::<Self>() }
+        };
+
+        let (controller, test_result) = controller
+            .into_command_sender_with_response()
+            .send_command_with_response(commands::TestFirstPort)
+            .block_until_ready()
+            .read();
+
+        let controller = match test_result {
+            PortTestResult::Passed => {
+                config.set_first_port_interrupt(EnabledOrDisabled::Enabled);
+                let controller = controller
+                    .into_command_sender()
+                    .send_command(commands::EnableFirstPort);
+
+                unsafe { controller.reset_chain::<Self>() }
+            }
+            _ => unsafe { controller.reset_chain::<Self>() },
+        };
+
+        let (controller, test_result) = controller
+            .into_command_sender_with_response()
+            .send_command_with_response(commands::TestFirstPort)
+            .block_until_ready()
+            .read();
+
+        let controller = match test_result {
+            PortTestResult::Passed => {
+                config.set_second_port_interrupt(EnabledOrDisabled::Enabled);
+                let controller = controller
+                    .into_command_sender()
+                    .send_command(commands::EnableSecondPort);
+
+                unsafe { controller.reset_chain::<Self>() }
+            }
+            _ => unsafe { controller.reset_chain::<Self>() },
+        };
+
+        let controller = controller
+            .into_command_sender()
+            .send_command(commands::WriteConfigurationByte);
+        let controller = controller.as_writer().block_until_ready().write(config.0);
+
+        unsafe { controller.reset_chain::<Self>() }
     }
 }
 
@@ -204,13 +306,6 @@ pub trait ControllerMarker: WaitingTrait {
 //     }
 // }
 //
-// trait PS2ControllerInternal {
-//     fn send_command<C: Command>(&mut self, command: C);
-//
-//     fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response;
-//
-//     fn read_status_byte(&mut self) -> StatusByte;
-// }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PS2ControllerReadError {
@@ -224,6 +319,7 @@ pub enum PS2ControllerSendError {
     InputBufferFull,
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct DataPort(Port<u8>);
 
@@ -243,6 +339,7 @@ impl DataPort {
     }
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct StatusRegister(PortReadOnly<u8>);
 
@@ -363,6 +460,7 @@ impl From<bool> for CommandOrData {
     }
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct CommandRegister(PortWriteOnly<u8>);
 

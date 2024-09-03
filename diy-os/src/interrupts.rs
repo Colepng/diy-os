@@ -6,7 +6,11 @@ use x86_64::{
     VirtAddr,
 };
 
-use crate::{gdt, pit, println, ps2::controller::PS2Controller, syscalls};
+use crate::{
+    gdt, pit, println,
+    ps2::controller::{Inital, InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
+    syscalls,
+};
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
@@ -112,13 +116,18 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    // println!("key press");
-    //
     {
         let mut con = crate::ps2::CONTROLLER.acquire();
 
-        match con.as_mut() {
-            Some(controller) => println!("{:X}", controller.read_byte().unwrap()),
+        match con.take() {
+            Some(controller) => {
+                let (controller, result): (_, u8) =
+                    WaitingToReadTrait::<u8>::try_read(controller.as_reader())
+                        .unwrap()
+                        .read();
+                println!("{}", result);
+                con.replace(controller);
+            }
             None => {}
         }
     }
