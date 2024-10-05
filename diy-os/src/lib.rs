@@ -58,6 +58,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod interrupts;
 pub mod memory;
+pub mod multitasking;
 pub mod pit;
 pub mod ps2;
 pub mod serial;
