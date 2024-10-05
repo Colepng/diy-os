@@ -1,4 +1,4 @@
-use super::font::{get_raster, SIZE, STYLE, WIDTH};
+use super::font::{SIZE, STYLE, WIDTH, get_raster};
 
 pub struct Pixels(pub usize);
 

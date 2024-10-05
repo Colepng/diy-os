@@ -1,5 +1,6 @@
-use crate::ps2::controller::Command;
-use crate::ps2::controller::CommandWithResponse;
+use super::{AnyCommand, Command, CommandWithResponse, CommandWithValue};
+
+use super::responses::ConfigurationByte;
 
 pub struct ReadConfigurationByte;
 
@@ -9,6 +10,7 @@ impl Into<u8> for ReadConfigurationByte {
     }
 }
 
+impl AnyCommand for ReadConfigurationByte {}
 impl CommandWithResponse for ReadConfigurationByte {
     type Response = super::responses::ConfigurationByte;
 }
@@ -26,6 +28,7 @@ impl Into<u8> for ReadByteN {
     }
 }
 
+impl AnyCommand for ReadByteN {}
 impl CommandWithResponse for ReadByteN {
     type Response = super::responses::UnknownPurpose;
 }
@@ -39,7 +42,10 @@ impl Into<u8> for WriteConfigurationByte {
     }
 }
 
-impl Command for WriteConfigurationByte {}
+impl AnyCommand for WriteConfigurationByte {}
+impl CommandWithValue for WriteConfigurationByte {
+    type Value = ConfigurationByte;
+}
 
 /// TODO: Improve api to deal with offset
 /// Write next byte to byte N internal memory, N is: (the offset + 97) & 0x1F
@@ -54,6 +60,7 @@ impl Into<u8> for WriteByteN {
     }
 }
 
+impl AnyCommand for WriteByteN {}
 impl Command for WriteByteN {}
 
 /// Disables the second PS/2 port
@@ -66,6 +73,7 @@ impl Into<u8> for DisableSecondPort {
     }
 }
 
+impl AnyCommand for DisableSecondPort {}
 impl Command for DisableSecondPort {}
 
 /// Enables the second PS/2 port
@@ -78,6 +86,7 @@ impl Into<u8> for EnableSecondPort {
     }
 }
 
+impl AnyCommand for EnableSecondPort {}
 impl Command for EnableSecondPort {}
 
 /// Tests the second PS/2 port
@@ -90,6 +99,7 @@ impl Into<u8> for TestSecondPort {
     }
 }
 
+impl AnyCommand for TestSecondPort {}
 impl CommandWithResponse for TestSecondPort {
     type Response = super::responses::PortTestResult;
 }
@@ -103,6 +113,7 @@ impl Into<u8> for TestController {
     }
 }
 
+impl AnyCommand for TestController {}
 impl CommandWithResponse for TestController {
     type Response = super::responses::ControllerTestResult;
 }
@@ -116,6 +127,7 @@ impl Into<u8> for TestFirstPort {
     }
 }
 
+impl AnyCommand for TestFirstPort {}
 impl CommandWithResponse for TestFirstPort {
     type Response = super::responses::PortTestResult;
 }
@@ -129,6 +141,7 @@ impl Into<u8> for DiagonsticDump {
     }
 }
 
+impl AnyCommand for DiagonsticDump {}
 impl CommandWithResponse for DiagonsticDump {
     type Response = super::responses::UnknownPurpose;
 }
@@ -142,6 +155,7 @@ impl Into<u8> for DisableFirstPort {
     }
 }
 
+impl AnyCommand for DisableFirstPort {}
 impl Command for DisableFirstPort {}
 
 /// Enables the first PS/2 port
@@ -153,6 +167,7 @@ impl Into<u8> for EnableFirstPort {
     }
 }
 
+impl AnyCommand for EnableFirstPort {}
 impl Command for EnableFirstPort {}
 
 /// Reads the controller's input port
@@ -164,6 +179,7 @@ impl Into<u8> for ReadControllerInputPort {
     }
 }
 
+impl AnyCommand for ReadControllerInputPort {}
 impl CommandWithResponse for ReadControllerInputPort {
     type Response = super::responses::UnknownPurpose;
 }
@@ -177,6 +193,7 @@ impl Into<u8> for CopyInputBits0To3ToStatusBits4To7 {
     }
 }
 
+impl AnyCommand for CopyInputBits0To3ToStatusBits4To7 {}
 impl Command for CopyInputBits0To3ToStatusBits4To7 {}
 
 /// Copies bits 4 to 7 of input port to status bits 4 to 7
@@ -188,6 +205,7 @@ impl Into<u8> for CopyInputBits4To7ToStatusBits4To7 {
     }
 }
 
+impl AnyCommand for CopyInputBits4To7ToStatusBits4To7 {}
 impl Command for CopyInputBits4To7ToStatusBits4To7 {}
 
 /// Reads the controller's output port
@@ -199,6 +217,7 @@ impl Into<u8> for ReadControllerOutputPort {
     }
 }
 
+impl AnyCommand for ReadControllerOutputPort {}
 impl CommandWithResponse for ReadControllerOutputPort {
     type Response = super::responses::UnknownPurpose;
 }
@@ -212,6 +231,7 @@ impl Into<u8> for WriteNextByteToOutputPort {
     }
 }
 
+impl AnyCommand for WriteNextByteToOutputPort {}
 impl Command for WriteNextByteToOutputPort {}
 
 /// Writes the next byte to the first PS/2 port's input buffer. This will make it look like the
@@ -225,6 +245,7 @@ impl Into<u8> for WriteNextByteToFirstPS2PortOutputBuffer {
     }
 }
 
+impl AnyCommand for WriteNextByteToFirstPS2PortOutputBuffer {}
 impl Command for WriteNextByteToFirstPS2PortOutputBuffer {}
 
 /// Writes the next byte to the second PS/2 port's input buffer. This will make it look like the
@@ -238,6 +259,7 @@ impl Into<u8> for WriteNextByteToSecondPS2PortOutputBuffer {
     }
 }
 
+impl AnyCommand for WriteNextByteToSecondPS2PortOutputBuffer {}
 impl Command for WriteNextByteToSecondPS2PortOutputBuffer {}
 
 /// Writes the next byte to the second PS/2 port's input buffer. This will send the next byte
@@ -251,6 +273,7 @@ impl Into<u8> for WriteNextByteToSecondPS2PortInputBuffer {
     }
 }
 
+impl AnyCommand for WriteNextByteToSecondPS2PortInputBuffer {}
 impl Command for WriteNextByteToSecondPS2PortInputBuffer {}
 
 /// Pulse output line low for 6 ms
@@ -262,4 +285,5 @@ impl Into<u8> for PulseOutputLineLow {
     }
 }
 
+impl AnyCommand for PulseOutputLineLow {}
 impl Command for PulseOutputLineLow {}

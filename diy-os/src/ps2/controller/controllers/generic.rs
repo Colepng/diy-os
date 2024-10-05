@@ -1,9 +1,9 @@
 use crate::ps2::controller::{
     BufferStatus, CommandRegister, CommandSender, CommandSenderTrait, CommandSenderWithResponse,
-    CommandSenderWithResponseTrait, DataPort, Inital, InitalTrait, PS2Controller,
-    PS2ControllerInternal, ReadyToRead, ReadyToReadTrait, ReadyToWrite, ReadyToWriteTrait,
-    Response, State, StatusRegister, WaitingToRead, WaitingToReadTrait, WaitingToWrite,
-    WaitingToWriteTrait,
+    CommandSenderWithResponseTrait, CommandSenderWithValue, CommandSenderWithValueTrait, DataPort,
+    Inital, InitalTrait, PS2Controller, PS2ControllerInternal, ReadyToRead, ReadyToReadTrait,
+    ReadyToWrite, ReadyToWriteTrait, Response, State, StatusRegister, WaitingToRead,
+    WaitingToReadTrait, WaitingToWrite, WaitingToWriteTrait,
 };
 use core::marker::PhantomData;
 
@@ -29,6 +29,7 @@ impl GenericPS2Controller<Inital> {
 impl PS2ControllerInternal for GenericPS2Controller<Inital> {
     type CommandSender = GenericPS2Controller<CommandSender>;
     type CommandSenderWithResponse = GenericPS2Controller<CommandSenderWithResponse>;
+    type CommandSenderWithValue = GenericPS2Controller<CommandSenderWithValue>;
 
     fn into_command_sender(self) -> Self::CommandSender {
         GenericPS2Controller::<CommandSender> {
@@ -51,44 +52,18 @@ impl PS2ControllerInternal for GenericPS2Controller<Inital> {
             _phantom_data: PhantomData,
         }
     }
+
+    fn into_command_sender_with_value(self) -> Self::CommandSenderWithValue {
+        GenericPS2Controller::<CommandSenderWithValue> {
+            data_port: self.data_port,
+            status_register: self.status_register,
+            command_register: self.command_register,
+            _phantom_data: PhantomData,
+        }
+    }
 }
 
 impl PS2Controller for GenericPS2Controller<Inital> {}
-
-// impl PS2ControllerInternal for GenericPS2Controller {
-//     fn send_command<C: Command>(&mut self, command: C) {
-//         self.command_register.send_command(command);
-//     }
-//
-//     fn send_command_with_response<C: CommandWithResponse>(&mut self, command: C) -> C::Response {
-//         self.command_register.send_command_with_response(command);
-//
-//         C::Response::from(self.data_port.read())
-//     }
-//
-//     fn read_status_byte(&mut self) -> StatusByte {
-//         self.status_register.read()
-//     }
-// }
-//
-// impl PS2Controller for GenericPS2Controller {
-//     fn send_byte(&mut self, value: u8) -> Result<(), PS2ControllerSendError> {
-//         match self.status_register.read().get_input_buffer_status() {
-//             BufferStatus::Empty => {
-//                 self.data_port.write(value);
-//                 Ok(())
-//             }
-//             BufferStatus::Full => Err(PS2ControllerSendError::InputBufferFull),
-//         }
-//     }
-//
-//     fn read_byte(&mut self) -> Result<u8, PS2ControllerReadError> {
-//         match self.status_register.read().get_output_buffer_status() {
-//             BufferStatus::Full => Ok(self.data_port.read()),
-//             BufferStatus::Empty => Err(PS2ControllerReadError::OutputBufferEmpty),
-//         }
-//     }
-// }
 
 impl InitalTrait for GenericPS2Controller<Inital> {
     type Reader = GenericPS2Controller<WaitingToRead>;
@@ -179,7 +154,7 @@ impl<B: From<u8>> ReadyToReadTrait<B> for GenericPS2Controller<ReadyToRead> {
     }
 }
 
-impl WaitingToWriteTrait for GenericPS2Controller<WaitingToWrite> {
+impl<B: Into<u8>> WaitingToWriteTrait<B> for GenericPS2Controller<WaitingToWrite> {
     type Ready = GenericPS2Controller<ReadyToWrite>;
 
     fn block_until_ready(mut self) -> Self::Ready {
@@ -213,11 +188,11 @@ impl WaitingToWriteTrait for GenericPS2Controller<WaitingToWrite> {
     }
 }
 
-impl ReadyToWriteTrait for GenericPS2Controller<ReadyToWrite> {
+impl<B: Into<u8>> ReadyToWriteTrait<B> for GenericPS2Controller<ReadyToWrite> {
     type Inital = GenericPS2Controller<Inital>;
 
-    fn write(mut self, value: u8) -> Self::Inital {
-        self.data_port.write(value);
+    fn write(mut self, value: B) -> Self::Inital {
+        self.data_port.write(value.into());
 
         GenericPS2Controller::<Inital> {
             data_port: self.data_port,
@@ -250,9 +225,27 @@ impl CommandSenderWithResponseTrait for GenericPS2Controller<CommandSenderWithRe
         mut self,
         command: C,
     ) -> Self::Reader<C::Response> {
-        self.command_register.send_command_with_response(command);
+        self.command_register.send_command(command);
 
         GenericPS2Controller::<WaitingToRead> {
+            data_port: self.data_port,
+            status_register: self.status_register,
+            command_register: self.command_register,
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+impl CommandSenderWithValueTrait for GenericPS2Controller<CommandSenderWithValue> {
+    type Writer<B: crate::ps2::controller::Value> = GenericPS2Controller<WaitingToWrite>;
+
+    fn send_command_with_value<C: crate::ps2::controller::CommandWithValue>(
+        mut self,
+        command: C,
+    ) -> Self::Writer<C::Value> {
+        self.command_register.send_command(command);
+
+        GenericPS2Controller::<WaitingToWrite> {
             data_port: self.data_port,
             status_register: self.status_register,
             command_register: self.command_register,

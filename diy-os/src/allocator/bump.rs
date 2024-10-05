@@ -3,7 +3,7 @@ use core::{
     ptr,
 };
 
-use super::{align_up, Locked};
+use super::{Locked, align_up};
 
 pub struct BumpAllocator {
     heap_start: *mut u8,

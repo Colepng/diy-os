@@ -5,12 +5,10 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_harness_main"]
 #![feature(abi_x86_interrupt)]
-#![feature(const_mut_refs)]
 #![feature(negative_impls)]
 #![feature(ascii_char)]
 #![feature(ascii_char_variants)]
 #![feature(anonymous_lifetime_in_impl_trait)]
-#![feature(const_refs_to_static)]
 #![feature(strict_provenance)]
 #![feature(exposed_provenance)]
 #![feature(layout_for_ptr)]
@@ -42,7 +40,7 @@ use bootloader_api::BootInfo;
 use core::panic::PanicInfo;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
-use x86_64::structures::paging::{mapper::MapToError, OffsetPageTable, Size4KiB};
+use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
 
 #[cfg(test)]
 use bootloader_api::entry_point;
@@ -103,7 +101,7 @@ entry_point!(test_main);
 
 /// Entry point for `cargo test`
 #[cfg(test)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 fn test_main(boot_info: &'static mut BootInfo) -> ! {
     init(boot_info, 10);
     test_harness_main();

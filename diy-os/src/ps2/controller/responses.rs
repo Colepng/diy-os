@@ -1,8 +1,9 @@
+use crate::ps2::controller::Value;
 use core::ops::Not;
 
 use super::{Response, SystemFlag};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct ConfigurationByte(pub u8);
 
@@ -89,10 +90,17 @@ impl ConfigurationByte {
 }
 
 impl Response for ConfigurationByte {}
+impl Value for ConfigurationByte {}
 
 impl From<u8> for ConfigurationByte {
     fn from(value: u8) -> Self {
         Self(value)
+    }
+}
+
+impl From<ConfigurationByte> for u8 {
+    fn from(value: ConfigurationByte) -> Self {
+        value.0
     }
 }
 
@@ -164,11 +172,7 @@ pub enum EnabledOrDisabled {
 
 impl From<bool> for EnabledOrDisabled {
     fn from(value: bool) -> Self {
-        if value {
-            Self::Enabled
-        } else {
-            Self::Disabled
-        }
+        if value { Self::Enabled } else { Self::Disabled }
     }
 }
 

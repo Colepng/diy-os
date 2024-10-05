@@ -5,22 +5,29 @@ pub mod commands;
 pub mod controllers;
 pub mod responses;
 
-pub trait Command: Into<u8> {}
+pub trait AnyCommand: Into<u8> {}
 
-pub trait CommandWithResponse: Into<u8> {
+pub trait Command: AnyCommand {}
+
+pub trait CommandWithResponse: AnyCommand {
     type Response: Response;
 }
 
-pub trait Response: From<u8> {}
+pub trait CommandWithValue: AnyCommand {
+    type Value: Value;
+}
 
-trait State {}
+pub trait Response: From<u8> {}
+pub trait Value: Into<u8> {}
+
+pub trait State {}
 
 pub struct Inital;
 impl State for Inital {}
 
 pub trait InitalTrait: PS2ControllerInternal {
     type Reader: WaitingToReadTrait<u8>;
-    type Writer: WaitingToWriteTrait;
+    type Writer: WaitingToWriteTrait<u8>;
 
     fn as_reader(self) -> Self::Reader;
     fn as_writer(self) -> Self::Writer;
@@ -59,8 +66,8 @@ pub trait ReadyToReadTrait<B: From<u8> = u8> {
 pub struct WaitingToWrite;
 impl State for WaitingToWrite {}
 
-pub trait WaitingToWriteTrait {
-    type Ready: ReadyToWriteTrait;
+pub trait WaitingToWriteTrait<B: Into<u8>> {
+    type Ready: ReadyToWriteTrait<B>;
 
     fn block_until_ready(self) -> Self::Ready;
 
@@ -74,18 +81,20 @@ pub trait WaitingToWriteTrait {
 pub struct ReadyToWrite;
 impl State for ReadyToWrite {}
 
-pub trait ReadyToWriteTrait {
+pub trait ReadyToWriteTrait<B: Into<u8>> {
     type Inital: InitalTrait;
 
-    fn write(self, value: u8) -> Self::Inital;
+    fn write(self, value: B) -> Self::Inital;
 }
 
 trait PS2ControllerInternal {
     type CommandSender: CommandSenderTrait;
     type CommandSenderWithResponse: CommandSenderWithResponseTrait;
+    type CommandSenderWithValue: CommandSenderWithValueTrait;
 
     fn into_command_sender(self) -> Self::CommandSender;
     fn into_command_sender_with_response(self) -> Self::CommandSenderWithResponse;
+    fn into_command_sender_with_value(self) -> Self::CommandSenderWithValue;
 
     fn read_status_byte(&mut self) -> StatusByte;
 }
@@ -110,6 +119,15 @@ pub trait CommandSenderWithResponseTrait {
         self,
         command: C,
     ) -> Self::Reader<C::Response>;
+}
+
+pub struct CommandSenderWithValue;
+impl State for CommandSenderWithValue {}
+
+pub trait CommandSenderWithValueTrait {
+    type Writer<B: Value>: WaitingToWriteTrait<B>;
+
+    fn send_command_with_value<C: CommandWithValue>(self, command: C) -> Self::Writer<C::Value>;
 }
 
 pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
@@ -142,9 +160,10 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
         config.set_first_port_clock(EnabledOrDisabled::Enabled);
 
         let controller = controller
-            .into_command_sender()
-            .send_command(commands::WriteConfigurationByte);
-        let controller = controller.as_writer().block_until_ready().write(config.0);
+            .into_command_sender_with_value()
+            .send_command_with_value(commands::WriteConfigurationByte)
+            .block_until_ready()
+            .write(config);
 
         let (controller, result) = controller
             .into_command_sender_with_response()
@@ -159,9 +178,10 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
 
         // Resend config because a controller test sometimes resets the config
         let controller = controller
-            .into_command_sender()
-            .send_command(commands::WriteConfigurationByte);
-        let controller = controller.as_writer().block_until_ready().write(config.0);
+            .into_command_sender_with_value()
+            .send_command_with_value(commands::WriteConfigurationByte)
+            .block_until_ready()
+            .write(config);
 
         let controller = controller
             .into_command_sender()
@@ -187,9 +207,10 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
             config.set_second_port_clock(EnabledOrDisabled::Enabled);
 
             let controller = controller
-                .into_command_sender()
-                .send_command(commands::WriteConfigurationByte);
-            let controller = controller.as_writer().block_until_ready().write(config.0);
+                .into_command_sender_with_value()
+                .send_command_with_value(commands::WriteConfigurationByte)
+                .block_until_ready()
+                .write(config);
 
             // TODO: Improve method of "resetting the type"
             unsafe { controller.reset_chain::<Self>() }
@@ -234,9 +255,10 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
         };
 
         let controller = controller
-            .into_command_sender()
-            .send_command(commands::WriteConfigurationByte);
-        let controller = controller.as_writer().block_until_ready().write(config.0);
+            .into_command_sender_with_value()
+            .send_command_with_value(commands::WriteConfigurationByte)
+            .block_until_ready()
+            .write(config);
 
         unsafe { controller.reset_chain::<Self>() }
     }
@@ -469,11 +491,7 @@ impl CommandRegister {
         Self(PortWriteOnly::new(0x64))
     }
 
-    pub fn send_command(&mut self, command: impl Command) {
+    pub fn send_command(&mut self, command: impl AnyCommand) {
         unsafe { self.0.write(command.into()) };
-    }
-
-    pub fn send_command_with_response(&mut self, command: impl CommandWithResponse) {
-        unsafe { self.0.write(command.into()) }
     }
 }

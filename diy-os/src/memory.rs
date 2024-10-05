@@ -1,8 +1,8 @@
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::registers::control::Cr3;
 use x86_64::{
-    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
+    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
 };
 
 /// initalis a [`OffsetPageTable`] from a `physical_memory_offset`

@@ -130,7 +130,7 @@ fn load_elf_and_jump_into_it(
         | PageTableFlags::WRITABLE
         | PageTableFlags::PRESENT
         | PageTableFlags::NO_CACHE; //| PageTableFlags::
-                                    //
+    //
     let frame = frame_allocator.allocate_frame().unwrap();
 
     // Setup page for load

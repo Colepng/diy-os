@@ -1,14 +1,14 @@
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use x86_64::{
-    set_general_handler,
+    VirtAddr, set_general_handler,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
-    VirtAddr,
 };
 
 use crate::{
     gdt, pit, println,
     ps2::controller::{Inital, InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
+    ps2::devices::PS2Device,
     syscalls,
 };
 
@@ -116,7 +116,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    {
+    let byte = {
         let mut con = crate::ps2::CONTROLLER.acquire();
 
         match con.take() {

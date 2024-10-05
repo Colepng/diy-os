@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use x86_64::instructions::tables::load_tss;
-use x86_64::registers::segmentation::{Segment, CS};
+use x86_64::registers::segmentation::{CS, Segment};
 use x86_64::structures::tss::TaskStateSegment;
-use x86_64::{structures::gdt::SegmentSelector, VirtAddr};
+use x86_64::{VirtAddr, structures::gdt::SegmentSelector};
 
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable};
@@ -15,13 +15,10 @@ lazy_static! {
         let _user_code = gdt.append(Descriptor::user_code_segment());
         let _user_data = gdt.append(Descriptor::user_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
-        (
-            gdt,
-            Selectors {
-                code_selector,
-                tss_selector,
-            },
-        )
+        (gdt, Selectors {
+            code_selector,
+            tss_selector,
+        })
     };
 }
 
