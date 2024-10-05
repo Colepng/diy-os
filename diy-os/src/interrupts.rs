@@ -125,10 +125,24 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
                     WaitingToReadTrait::<u8>::try_read(controller.as_reader())
                         .unwrap()
                         .read();
-                println!("{}", result);
                 con.replace(controller);
+                Some(result)
             }
-            None => {}
+            None => None,
+        }
+    };
+
+    if let Some(byte) = byte {
+        let mut device_guard = crate::ps2::PS1_DEVICE.acquire();
+
+        match device_guard.take() {
+            Some(mut device) => {
+                device.received_byte(byte);
+                device_guard.replace(device);
+            }
+            None => {
+                println!("No device 1 driver loaded")
+            }
         }
     }
 

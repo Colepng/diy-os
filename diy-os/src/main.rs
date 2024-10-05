@@ -18,16 +18,26 @@
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use bootloader_api::{
+    BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
-    entry_point, BootInfo, BootloaderConfig,
+    entry_point,
 };
+
 use core::panic::PanicInfo;
 use diy_os::{
     elf,
     filesystem::ustar,
-    hlt_loop, init, println,
-    ps2::{controller::PS2Controller, GenericPS2Controller},
+    hlt_loop, init,
+    multitasking::TaskRunner,
+    println,
+    ps2::{
+        GenericPS2Controller,
+        controller::PS2Controller,
+        devices::{PS2Device1Task, keyboard::Keyboard},
+    },
+    spinlock::Spinlock,
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
@@ -68,11 +78,19 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     {
         diy_os::ps2::CONTROLLER.acquire().replace(gernaric);
+        diy_os::ps2::PS1_DEVICE
+            .acquire()
+            .replace(Box::new(Keyboard::new()));
     }
 
     // let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
 
-    hlt_loop();
+    // hlt_loop();
+    let mut task_runner = TaskRunner::new();
+
+    task_runner.add_task(PS2Device1Task);
+
+    task_runner.start_running();
 }
 
 #[repr(u8)]
