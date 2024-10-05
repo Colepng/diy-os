@@ -49,6 +49,7 @@ use bootloader_api::entry_point;
 extern crate alloc;
 
 pub mod allocator;
+pub mod collections;
 pub mod console;
 pub mod elf;
 pub mod errors;
