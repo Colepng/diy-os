@@ -5,7 +5,7 @@ pub struct LinkedList<T> {
 }
 
 impl<T> LinkedList<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { head: None }
     }
 

@@ -33,7 +33,7 @@ pub struct LinkedQueue<T> {
 }
 
 impl<T> LinkedQueue<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             internal: LinkedList::new(),
         }
