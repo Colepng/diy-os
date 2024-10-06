@@ -56,6 +56,16 @@ impl<T: ?Sized> Spinlock<T> {
         self.locked.store(false, Ordering::Release);
         self.enable_interrupts();
     }
+
+    /// Runs a closure taking the spinlock
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.acquire();
+
+        f(&mut guard)
+    }
 }
 // these are the only places where `T: Send` matters; all other
 // functionality works fine on a single thread.
