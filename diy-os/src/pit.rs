@@ -5,9 +5,6 @@ use crate::{errors, spinlock::Spinlock};
 /// Lets all agree to never touch this in anything but the main cpu thread
 static mut PIT_TAKEN: bool = false;
 
-/// Sleep counter
-pub static SLEEP_COUNTER: Spinlock<u64> = Spinlock::new(0);
-
 pub struct Pit {
     pub channel_0_port: ChannelPort,
     pub channel_1_port: ChannelPort,

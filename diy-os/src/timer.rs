@@ -1,3 +1,5 @@
+use crate::println;
+use crate::spinlock::Spinlock;
 use crate::{errors::validity::InputOutOfRangeInclusive, pit};
 
 #[derive(thiserror::Error, Debug)]
@@ -34,13 +36,50 @@ pub fn setup_system_timer(frequency: u32) -> Result<(), SystemTimerError> {
     Ok(())
 }
 
+/// Sleep counter
+pub static TIME_KEEPER: Spinlock<TimeKeeper> = Spinlock::new(TimeKeeper::new());
+
+pub struct TimeKeeper {
+    pub sleep_counter: u64,
+    pub timer_counter: u64,
+}
+
+impl TimeKeeper {
+    pub const fn new() -> Self {
+        Self {
+            sleep_counter: 0,
+            timer_counter: 0,
+        }
+    }
+
+    pub const fn tick(&mut self) {
+        self.sleep_counter = self.sleep_counter.saturating_sub(1);
+        self.timer_counter = self.timer_counter.saturating_add(1);
+    }
+}
+
 /// time in ms
 pub fn sleep(count: u64) {
-    *pit::SLEEP_COUNTER.acquire() = count;
-    pit::SLEEP_COUNTER.release();
+    TIME_KEEPER.acquire().sleep_counter = count;
+    TIME_KEEPER.release();
 
-    while *pit::SLEEP_COUNTER.acquire() > 0 {
-        pit::SLEEP_COUNTER.release();
+    while TIME_KEEPER.acquire().sleep_counter > 0 {
+        TIME_KEEPER.release();
         x86_64::instructions::hlt();
     }
+}
+
+pub fn time<F, R>(f: F) -> (R, u64)
+where
+    F: FnOnce() -> R,
+{
+    TIME_KEEPER.acquire().timer_counter = 0;
+    TIME_KEEPER.release();
+
+    let ret = f();
+
+    let ms = TIME_KEEPER.acquire().timer_counter;
+    TIME_KEEPER.release();
+
+    (ret, ms)
 }

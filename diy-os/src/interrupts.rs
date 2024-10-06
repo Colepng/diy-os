@@ -7,9 +7,12 @@ use x86_64::{
 
 use crate::{
     gdt, pit, println,
-    ps2::controller::{Inital, InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
-    ps2::devices::PS2Device,
+    ps2::{
+        controller::{Inital, InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
+        devices::PS2Device,
+    },
     syscalls,
+    timer::TIME_KEEPER,
 };
 
 pub const PIC_1_OFFSET: u8 = 32;
@@ -106,8 +109,8 @@ extern "x86-interrupt" fn double_fault_handler(
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    let mut counter = pit::SLEEP_COUNTER.acquire();
-    *counter = (*counter).saturating_sub(1);
+    let mut counter = TIME_KEEPER.acquire();
+    counter.tick();
 
     unsafe {
         PICS.acquire()
