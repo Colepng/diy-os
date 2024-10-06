@@ -18,7 +18,7 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String, vec::Vec};
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
@@ -35,9 +35,13 @@ use diy_os::{
     ps2::{
         GenericPS2Controller,
         controller::PS2Controller,
-        devices::{PS2Device1Task, keyboard::Keyboard},
+        devices::{
+            PS2Device1Task,
+            keyboard::{Keyboard, SCANCODE_BUFFER, ScanCode},
+        },
     },
     spinlock::Spinlock,
+    timer::sleep,
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
@@ -89,8 +93,79 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let mut task_runner = TaskRunner::new();
 
     task_runner.add_task(PS2Device1Task);
+    task_runner.add_task(KernelShell::new());
 
     task_runner.start_running();
+}
+
+struct KernelShell {
+    input: String,
+}
+
+impl KernelShell {
+    pub fn new() -> Self {
+        Self {
+            input: String::new(),
+        }
+    }
+}
+
+impl diy_os::multitasking::Task for KernelShell {
+    fn run(&mut self) {
+        let read_codes = SCANCODE_BUFFER.with(|buffer| {
+            let mut temp = Vec::new();
+            temp.append(buffer);
+            temp
+        });
+
+        if !read_codes.is_empty() {
+            read_codes
+                .into_iter()
+                .flat_map(|code| match code.scan_code {
+                    0x16 => Some('1'),
+                    0x1B => Some('S'),
+                    0x1C => Some('A'),
+                    0x1D => Some('W'),
+                    0x23 => Some('D'),
+                    0x29 => Some(' '),
+                    0x45 => Some('0'),
+                    0x5A => Some('\n'),
+                    scan_code => {
+                        diy_os::print!("{scan_code:X}");
+                        None
+                    },
+                })
+                .for_each(|c| {
+                    diy_os::print!("{c}");
+                    self.input.push(c)
+                });
+
+            if self.input.contains('\n') {
+                let lines = self.input.lines();
+
+                for line in lines {
+                    let mut words = line.split_whitespace();
+                    let first_word = words.next().unwrap();
+                    match first_word {
+                        "ASD" => {
+                            let amount = words.next().unwrap().parse().unwrap();
+                            println!("sleeping for {amount}");
+
+                            sleep(amount);
+
+                            println!("done sleeping");
+                        }
+                        "WAD" => {
+                            panic!("yo fuck you no more os");
+                        }
+                        command => println!("{command} is invalid"),
+                    }
+                }
+
+                self.input.clear();
+            }
+        }
+    }
 }
 
 #[repr(u8)]

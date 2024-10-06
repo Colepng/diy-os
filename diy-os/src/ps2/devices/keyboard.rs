@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     collections::queues::LinkedQueue,
     multitasking::Task,
@@ -9,9 +11,12 @@ use crate::{
             WaitingToReadTrait, WaitingToWriteTrait,
         },
     },
+    spinlock::Spinlock,
 };
 
 use super::PS2Device;
+
+pub static SCANCODE_BUFFER: Spinlock<Vec<ScanCode>> = Spinlock::new(Vec::new());
 
 pub enum State {
     Idle,
@@ -74,7 +79,7 @@ impl ScanCodeBuilder {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ScanCode {
-    scan_code: u8,
+    pub scan_code: u8,
     is_released: bool,
     is_extended: bool,
 }
@@ -151,7 +156,9 @@ impl PS2Device for Keyboard {
                 }
             }
             State::ReceivedScanCode(scan_code) => {
-                println!("got scan code: {scan_code:#?}");
+                if !scan_code.is_released {
+                    SCANCODE_BUFFER.with(|buffer| buffer.push(scan_code));
+                }
 
                 self.state = State::Idle;
             }
