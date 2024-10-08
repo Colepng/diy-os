@@ -53,9 +53,9 @@ impl FrameBuffer {
     }
 
     fn write_rgb_pixel(&mut self, byte_offset: usize, color: Color) {
-        self.memio[byte_offset] = color.blue;
+        self.memio[byte_offset] = color.red;
         self.memio[byte_offset + 1] = color.green;
-        self.memio[byte_offset + 2] = color.red;
+        self.memio[byte_offset + 2] = color.blue;
     }
 
     fn write_unknown_4byte_pixel(&mut self, byte_offset: usize, color: Color) {
@@ -165,8 +165,6 @@ impl Write for FrameBuffer {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use super::FrameBuffer;
     use crate::{console::graphics::GraphicBackend, framebuffer::FrameBufferInfo};
 
