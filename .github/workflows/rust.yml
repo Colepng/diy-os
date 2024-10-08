@@ -18,6 +18,11 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
+    - name: Install Miri
+      run: |
+          rustup toolchain install nightly --component miri rust-src
+          rustup override set nightly
+          cargo miri setup
     - name: Build
       run: cargo build --verbose --lib
     - name: Run tests
