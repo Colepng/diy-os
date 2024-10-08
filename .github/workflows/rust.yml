@@ -18,6 +18,8 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
+    - name: Install x86_64-unknown-none
+      run: rustup target add x86_64-unknown-none
     - name: Install Miri
       run: |
           rustup toolchain install nightly --component miri rust-src
