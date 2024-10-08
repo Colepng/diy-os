@@ -168,3 +168,90 @@ impl Write for FrameBuffer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use super::FrameBuffer;
+    use crate::{console::graphics::GraphicBackend, framebuffer::FrameBufferInfo};
+
+    #[test]
+    fn plotting_bgr_test() {
+        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
+
+        let info = FrameBufferInfo {
+            byte_len: 4 * 100 * 100,
+            width: 100,
+            height: 100,
+            pixel_format: bootloader_api::info::PixelFormat::Bgr,
+            bytes_per_pixel: 4,
+            stride: 100,
+        };
+
+        let memio = unsafe {&mut * &raw mut BUFFER};
+
+        let mut fb = FrameBuffer::new(info, memio);
+
+        let color = crate::console::graphics::Color { red: 255, green: 255, blue: 100 };
+
+        fb.plot_pixel(0, 0, color);
+
+        assert_eq!(fb.memio[2], 255);
+        assert_eq!(fb.memio[1], 255);
+        assert_eq!(fb.memio[0], 100);
+
+    }
+    #[test]
+    fn plotting_rgb_test() {
+        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
+
+        let info = FrameBufferInfo {
+            byte_len: 4 * 100 * 100,
+            width: 100,
+            height: 100,
+            pixel_format: bootloader_api::info::PixelFormat::Rgb,
+            bytes_per_pixel: 4,
+            stride: 100,
+        };
+
+        let memio = unsafe {&mut * &raw mut BUFFER};
+
+        let mut fb = FrameBuffer::new(info, memio);
+
+        let color = crate::console::graphics::Color { red: 255, green: 255, blue: 100 };
+
+        fb.plot_pixel(0, 0, color);
+
+        assert_eq!(fb.memio[0], 255);
+        assert_eq!(fb.memio[1], 255);
+        assert_eq!(fb.memio[2], 100);
+    }
+
+    #[test]
+    fn plotting_unknown_test() {
+        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
+
+        let info = FrameBufferInfo {
+            byte_len: 4 * 100 * 100,
+            width: 100,
+            height: 100,
+            pixel_format: bootloader_api::info::PixelFormat::Unknown { red_position: 16, green_position: 8, blue_position: 0 },
+            bytes_per_pixel: 4,
+            stride: 100,
+        };
+
+        let memio = unsafe {&mut * &raw mut BUFFER};
+
+        let mut fb = FrameBuffer::new(info, memio);
+
+        let color = crate::console::graphics::Color { red: 255, green: 255, blue: 100 };
+
+        fb.plot_pixel(0, 0, color);
+
+        assert_eq!(fb.memio[2], 255);
+        assert_eq!(fb.memio[1], 255);
+        assert_eq!(fb.memio[0], 100);
+    }
+ 
+}

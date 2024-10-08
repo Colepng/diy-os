@@ -57,6 +57,7 @@ static BOOTLOADER_CONFIG: BootloaderConfig = {
 entry_point!(main_wrapper, config = &BOOTLOADER_CONFIG);
 
 // SAFETY: there is no other global function of this name
+#[cfg(not(test))]
 #[unsafe(no_mangle)]
 extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
     match main(boot_info) {
@@ -269,14 +270,14 @@ fn panic(info: &PanicInfo) -> ! {
     hlt_loop();
 }
 
-#[cfg(test)]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    diy_os::test_panic_handler(info)
-}
+// #[cfg(test)]
+// #[panic_handler]
+// fn panic(info: &PanicInfo) -> ! {
+//     diy_os::test_panic_handler(info)
+// }
 
 // test to make sure tests won't panic
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
-}
+// #[test_case]
+// fn trivial_assertion() {
+//     assert_eq!(1, 1);
+// }
