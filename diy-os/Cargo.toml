@@ -18,7 +18,7 @@ volatile = "0.5.4"
 x86_64 = "0.15.1"
 noto-sans-mono-bitmap = "0.3.0"
 thiserror = { version = "1.0.50", package = "thiserror-core", default-features = false }
-anyhow = { path="../../anyhow/", version = "1.0.86", default-features = false }
+anyhow = { path="../anyhow/", version = "1.0.86", default-features = false }
 
 # [build-dependencies]
 # cc = "1.0.0"
