@@ -65,22 +65,16 @@ impl FrameBuffer {
             blue_position,
         } = self.info.pixel_format
         {
-            let buffer_ptr = self.memio.as_mut_ptr();
-
             let color_u32 = (u32::from(color.red) << red_position)
                 | (u32::from(color.blue) << blue_position)
                 | (u32::from(color.green) << green_position);
 
-            // SAFETY: Assuming x and y are not larger then the screen size byte_offset should
-            // never be larger then the number of available bytes
-            let pixel_ptr = unsafe { buffer_ptr.byte_add(byte_offset) };
+            let color_u8s = unsafe { core::mem::transmute::<u32, [u8; 4]>(color_u32) };
 
-            #[allow(clippy::cast_ptr_alignment)]
-            // SAFETY: The pointer is aligned to a 4 byte boundary since there is 4
-            // bytes per pixel
-            unsafe {
-                *pixel_ptr.cast::<u32>() = color_u32;
-            }
+            self.memio[byte_offset] = color_u8s[0];
+            self.memio[byte_offset + 1] = color_u8s[1];
+            self.memio[byte_offset + 2] = color_u8s[2];
+            self.memio[byte_offset + 3] = color_u8s[3];
         }
     }
 }
