@@ -1,8 +1,8 @@
 mod wrapper;
 
-#[allow(unused_imports)]
 use crate::println;
 use core::arch::asm;
+use core::arch::naked_asm;
 
 /// Which sys call is passed through rax
 /// # Safety
@@ -12,13 +12,13 @@ use core::arch::asm;
 pub unsafe extern "sysv64" fn system_call_handler_wrapper() {
     // loop {}
     unsafe {
-        asm!("mov rcx, rsp
+        naked_asm!("mov rcx, rsp
             sub rsp, 8 // align stack pointer
             mov rdi, rax
             call {0}
             add rsp, 8 // reset stack pointer
             iretq
-            ", sym system_call_handler, options(noreturn));
+            ", sym system_call_handler);
     }
 }
 

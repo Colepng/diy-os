@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use core::arch::asm;
+use core::arch::naked_asm;
 
 /// Parameters to functions are passed in the registers rdi, rsi, rdx, rcx, r8, r9, and further
 /// values are passed on the stack in reverse order
@@ -16,13 +17,12 @@ unsafe extern "sysv64" fn sys_call<Arg1, Arg2, Arg3, Arg4, Arg5>(
     arg5: Arg5,
 ) {
     unsafe {
-        asm!("push rcx",
+        naked_asm!("push rcx",
             "mov rax, rdi",
             "call {func}",
             "pop rcx",
             "ret",
             func = sym x86_64::instructions::interrupts::software_interrupt::<0x080>,
-            options(noreturn),
         );
     }
 }
