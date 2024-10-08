@@ -39,7 +39,8 @@ macro_rules! backtrace {
 #[cfg(feature = "std")]
 macro_rules! backtrace_if_absent {
     ($err:expr) => {
-        match core::error::request_ref::<std::backtrace::Backtrace>($err as &dyn core::error::Error) {
+        match core::error::request_ref::<std::backtrace::Backtrace>($err as &dyn core::error::Error)
+        {
             Some(_) => None,
             None => backtrace!(),
         }

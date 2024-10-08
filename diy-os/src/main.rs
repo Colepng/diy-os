@@ -134,7 +134,7 @@ impl diy_os::multitasking::Task for KernelShell {
                     scan_code => {
                         diy_os::print!("{scan_code:X}");
                         None
-                    },
+                    }
                 })
                 .for_each(|c| {
                     diy_os::print!("{c}");
