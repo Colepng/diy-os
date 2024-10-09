@@ -26,6 +26,7 @@ jobs:
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
     - name: Build
+      working-directory: .
       run: cargo build --verbose --lib
     - name: Run tests
       run: cargo test --verbose --lib
