@@ -121,3 +121,17 @@ impl File {
         self.data.as_ref().map(|data| &data.bytes)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Ustar;
+
+    #[test]
+    pub fn test_git_files() {
+        let mut bytes = std::fs::read("../bin/hello_world.tar").unwrap();
+        let file = bytes.as_mut_ptr();
+        let ramdisk = unsafe { Ustar::new(file as usize) };
+
+        let files = ramdisk.get_files();
+    }
+}

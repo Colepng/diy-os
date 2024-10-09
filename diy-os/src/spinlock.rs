@@ -7,6 +7,7 @@ use core::{
 
 pub struct Spinlock<T: ?Sized> {
     locked: AtomicBool,
+    #[cfg(not(test))]
     interrupts_enabled: UnsafeCell<Option<bool>>,
     data: UnsafeCell<T>,
 }
@@ -15,6 +16,7 @@ impl<T> Spinlock<T> {
     pub const fn new(data: T) -> Self {
         Self {
             locked: AtomicBool::new(false),
+            #[cfg(not(test))]
             interrupts_enabled: UnsafeCell::new(None),
             data: UnsafeCell::new(data),
         }
@@ -36,6 +38,7 @@ impl<T: ?Sized> Spinlock<T> {
     }
 
     fn enable_interrupts(&self) {
+        #[cfg(not(test))]
         unsafe {
             if (*self.interrupts_enabled.get()) == Some(true) {
                 x86_64::instructions::interrupts::enable();
@@ -44,10 +47,12 @@ impl<T: ?Sized> Spinlock<T> {
     }
 
     fn disable_interrupts(&self) {
+        #[cfg(not(test))]
         unsafe {
             *self.interrupts_enabled.get() = Some(x86_64::instructions::interrupts::are_enabled());
         }
 
+        #[cfg(not(test))]
         x86_64::instructions::interrupts::disable();
     }
 
@@ -109,5 +114,27 @@ impl<T: fmt::Debug + ?Sized> fmt::Debug for SpinlockGuard<'_, T> {
 impl<T: fmt::Display + ?Sized> fmt::Display for SpinlockGuard<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (**self).fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::thread::spawn;
+
+    use super::Spinlock;
+
+    #[test]
+    pub fn threaded_test() {
+        static SPINLOCK: Spinlock<u8> = Spinlock::new(1);
+
+        for _ in 0..100 {
+            let _ = spawn(|| {
+                let mut guard = SPINLOCK.acquire();
+
+                *guard += 1;
+            }).join();
+        }
+
+        assert_eq!(*SPINLOCK.acquire(), 101)
     }
 }
