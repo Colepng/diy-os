@@ -32,4 +32,4 @@ jobs:
     - name: Run tests
       run: cargo test --lib
     - name: Run Miri
-      run: cargo miri test --lib
+      run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib
