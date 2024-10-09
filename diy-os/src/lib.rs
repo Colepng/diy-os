@@ -10,6 +10,7 @@
 #![feature(layout_for_ptr)]
 #![feature(naked_functions)]
 #![feature(str_from_raw_parts)]
+#![feature(transmutability)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,

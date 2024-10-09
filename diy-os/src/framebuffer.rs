@@ -5,7 +5,7 @@ use crate::{
     },
     spinlock::Spinlock,
 };
-use core::fmt::Write;
+use core::{fmt::Write, mem::{Assume, TransmuteFrom}};
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 
@@ -69,7 +69,9 @@ impl FrameBuffer {
                 | (u32::from(color.blue) << blue_position)
                 | (u32::from(color.green) << green_position);
 
-            let color_u8s = unsafe { core::mem::transmute::<u32, [u8; 4]>(color_u32) };
+            let color_u8s = unsafe {
+                <[u8; 4] as TransmuteFrom<u32, { Assume::NOTHING }>>::transmute(color_u32)
+            };
 
             self.memio[byte_offset] = color_u8s[0];
             self.memio[byte_offset + 1] = color_u8s[1];

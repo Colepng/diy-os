@@ -132,7 +132,8 @@ mod tests {
                 let mut guard = SPINLOCK.acquire();
 
                 *guard += 1;
-            }).join();
+            })
+            .join();
         }
 
         assert_eq!(*SPINLOCK.acquire(), 101)
