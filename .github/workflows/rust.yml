@@ -26,8 +26,10 @@ jobs:
           cargo miri setup
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
-    - name: Build
-      working-directory: .
-      run: cargo build --verbose
+    # - name: Build
+    #   working-directory: .
+    #   run: cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose --lib
+      run: cargo test --lib
+    - name: Run Miri
+      run: cargo miri test --lib
