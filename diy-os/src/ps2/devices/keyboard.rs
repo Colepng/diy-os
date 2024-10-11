@@ -36,7 +36,7 @@ pub struct ScanCodeBuilder {
 }
 
 impl ScanCodeBuilder {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             scan_code: None,
             is_released: None,
@@ -44,7 +44,7 @@ impl ScanCodeBuilder {
         }
     }
 
-    pub fn set_code(self, code: u8) -> Self {
+    pub const fn set_code(self, code: u8) -> Self {
         Self {
             scan_code: Some(code),
             is_released: self.is_released,
@@ -52,7 +52,7 @@ impl ScanCodeBuilder {
         }
     }
 
-    pub fn set_released(self, released: bool) -> Self {
+    pub const fn set_released(self, released: bool) -> Self {
         Self {
             scan_code: self.scan_code,
             is_released: Some(released),
@@ -60,7 +60,7 @@ impl ScanCodeBuilder {
         }
     }
 
-    pub fn set_extended(self, extended: bool) -> Self {
+    pub const fn set_extended(self, extended: bool) -> Self {
         Self {
             scan_code: self.scan_code,
             is_released: self.is_released,
@@ -91,7 +91,7 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             commands: LinkedQueue::new(),
             state: State::Idle,

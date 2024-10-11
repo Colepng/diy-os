@@ -11,7 +11,7 @@ pub struct VecQueue<T> {
 }
 
 impl<T> VecQueue<T> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             internal: Vec::new(),
         }
@@ -51,7 +51,7 @@ impl<T> LinkedQueue<T> {
         self.internal.get_head()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.internal.is_empty()
     }
 }

@@ -50,8 +50,8 @@ impl<T> LinkedList<T> {
         self.head.as_mut().map(|node| &mut node.value)
     }
 
-    pub fn is_empty(&self) -> bool {
-        !self.head.is_some()
+    pub const fn is_empty(&self) -> bool {
+        self.head.is_none()
     }
 }
 
