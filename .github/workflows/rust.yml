@@ -30,6 +30,6 @@ jobs:
     #   working-directory: .
     #   run: cargo build --verbose
     - name: Run tests
-      run: cargo test --lib
+      run: cargo test --lib --target=x86_64-unknown-linux-gnu
     - name: Run Miri
-      run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --lib
+      run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
