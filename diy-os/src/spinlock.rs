@@ -62,8 +62,18 @@ impl<T: ?Sized> Spinlock<T> {
         self.enable_interrupts();
     }
 
-    /// Runs a closure taking the spinlock
-    pub fn with<F, R>(&self, f: F) -> R
+    /// Runs a closure mutable referencing the locked value
+    pub fn with_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.acquire();
+
+        f(&guard)
+    }
+
+    /// Runs a closure mutable referencing the locked value
+    pub fn with_mut_ref<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
     {
@@ -72,6 +82,26 @@ impl<T: ?Sized> Spinlock<T> {
         f(&mut guard)
     }
 }
+
+impl<T: Sized> Spinlock<T> {
+    pub fn with_move<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(T) -> (T, R),
+    {
+        let _guard = self.acquire();
+
+        let locked_value = unsafe { self.data.get().read() };
+
+        let (value, ret) = f(locked_value);
+
+        unsafe {
+            self.data.get().write(value);
+        }
+
+        ret
+    }
+}
+
 // these are the only places where `T: Send` matters; all other
 // functionality works fine on a single thread.
 unsafe impl<T: ?Sized + Send> Send for Spinlock<T> {}

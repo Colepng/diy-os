@@ -112,7 +112,7 @@ impl KernelShell {
 
 impl diy_os::multitasking::Task for KernelShell {
     fn run(&mut self) {
-        let read_codes = SCANCODE_BUFFER.with(|buffer| {
+        let read_codes = SCANCODE_BUFFER.with_mut_ref(|buffer| {
             let mut temp = Vec::new();
             temp.append(buffer);
             temp
