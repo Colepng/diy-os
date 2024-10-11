@@ -20,6 +20,7 @@ x86_64 = "0.15.1"
 noto-sans-mono-bitmap = "0.3.0"
 thiserror = { version = "1.0.50", package = "thiserror-core", default-features = false }
 anyhow = { path="../anyhow/", version = "1.0.86", default-features = false }
+diy-os-macros = { path="../diy-os-macros/" }
 
 # [build-dependencies]
 # cc = "1.0.0"
