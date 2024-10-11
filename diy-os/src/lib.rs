@@ -17,7 +17,7 @@
     clippy::perf,
     clippy::style,
     clippy::todo,
-    clippy::undocumented_unsafe_blocks
+    // clippy::undocumented_unsafe_blocks
 )]
 #![deny(
     clippy::suspicious,
@@ -28,8 +28,11 @@
     fuzzy_provenance_casts
 )]
 #![allow(
+    clippy::return_self_not_must_use,
+    clippy::new_without_default,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
+    clippy::todo,
     clippy::explicit_deref_methods
 )]
 

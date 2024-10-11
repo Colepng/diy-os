@@ -21,7 +21,7 @@ impl ConfigurationByte {
         }
     }
 
-    const fn get_bit(&self, bit: u8) -> bool {
+    const fn get_bit(self, bit: u8) -> bool {
         self.0 & (1 << bit) != 0
     }
 
@@ -49,7 +49,7 @@ impl ConfigurationByte {
     }
 
     pub fn set_second_port_interrupt(&mut self, value: EnabledOrDisabled) {
-        self.set_bit(1, value.into())
+        self.set_bit(1, value.into());
     }
 
     pub fn get_system_flag(&self) -> SystemFlag {

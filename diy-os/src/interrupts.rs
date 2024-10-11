@@ -118,11 +118,11 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     let byte = {
         #[allow(clippy::option_if_let_else)] // map_or is a moves, and uses the move value again
-                                             // in the closure
+        // in the closure
         crate::ps2::CONTROLLER.with_move(|inital_controller| {
             if let Some(controller) = inital_controller {
                 let (controller, result) =
-                    WaitingToReadTrait::<u8>::try_read(controller.as_reader())
+                    WaitingToReadTrait::<u8>::try_read(controller.into_reader())
                         .unwrap()
                         .read();
 

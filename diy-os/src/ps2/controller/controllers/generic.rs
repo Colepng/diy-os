@@ -69,7 +69,7 @@ impl InitalTrait for GenericPS2Controller<Inital> {
     type Reader = GenericPS2Controller<WaitingToRead>;
     type Writer = GenericPS2Controller<WaitingToWrite>;
 
-    fn as_reader(self) -> Self::Reader {
+    fn into_reader(self) -> Self::Reader {
         GenericPS2Controller::<WaitingToRead> {
             data_port: self.data_port,
             status_register: self.status_register,
@@ -78,7 +78,7 @@ impl InitalTrait for GenericPS2Controller<Inital> {
         }
     }
 
-    fn as_writer(self) -> Self::Writer {
+    fn into_writer(self) -> Self::Writer {
         GenericPS2Controller::<WaitingToWrite> {
             data_port: self.data_port,
             status_register: self.status_register,

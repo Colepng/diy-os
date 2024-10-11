@@ -132,6 +132,6 @@ mod tests {
         let file = bytes.as_mut_ptr();
         let ramdisk = unsafe { Ustar::new(file as usize) };
 
-        let files = ramdisk.get_files();
+        let _ = ramdisk.get_files();
     }
 }

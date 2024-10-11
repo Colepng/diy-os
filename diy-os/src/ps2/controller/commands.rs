@@ -1,7 +1,7 @@
 use super::{AnyCommand, Command, CommandWithResponse, CommandWithValue};
 
 use super::responses::ConfigurationByte;
-use diy_os_macros::{const_to_u8, const_value, AnyCommand, Command};
+use diy_os_macros::{AnyCommand, Command, const_to_u8, const_value};
 
 #[derive(const_to_u8, AnyCommand)]
 #[const_value(0x20)]
@@ -140,7 +140,6 @@ pub struct WriteNextByteToOutputPort;
 #[derive(const_to_u8, AnyCommand, Command)]
 #[const_value(0xD2)]
 pub struct WriteNextByteToFirstPS2PortOutputBuffer;
-
 
 /// Writes the next byte to the second PS/2 port's input buffer. This will make it look like the
 /// next byte was received from the second PS/2 port.

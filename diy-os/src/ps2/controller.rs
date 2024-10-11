@@ -29,8 +29,8 @@ pub trait InitalTrait: PS2ControllerInternal {
     type Reader: WaitingToReadTrait<u8>;
     type Writer: WaitingToWriteTrait<u8>;
 
-    fn as_reader(self) -> Self::Reader;
-    fn as_writer(self) -> Self::Writer;
+    fn into_reader(self) -> Self::Reader;
+    fn into_writer(self) -> Self::Writer;
 
     unsafe fn reset_chain<I: InitalTrait>(self) -> I;
 }
@@ -144,7 +144,7 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
             .into_command_sender()
             .send_command(commands::DisableSecondPort);
 
-        let (controller, _) = match controller.as_reader().try_read() {
+        let (controller, _) = match controller.into_reader().try_read() {
             Ok(con) => con.read(),
             Err(con) => (unsafe { con.stop_waiting().reset_chain() }, 0),
         };
@@ -173,7 +173,7 @@ pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
 
         match result {
             ControllerTestResult::TestFailed => todo!("handle failed controller test"),
-            _ => {}
+            ControllerTestResult::TestPassed => {}
         }
 
         // Resend config because a controller test sometimes resets the config

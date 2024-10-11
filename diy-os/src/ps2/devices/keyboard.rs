@@ -102,7 +102,7 @@ impl Keyboard {
     fn send_command(command: u8) {
         CONTROLLER.with_move(|controller| {
             let controller = controller.map(|controller| {
-                WaitingToWriteTrait::<u8>::block_until_ready(controller.as_writer())
+                WaitingToWriteTrait::<u8>::block_until_ready(controller.into_writer())
                     .write(Into::<u8>::into(command))
             });
             (controller, ())
