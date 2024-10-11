@@ -100,18 +100,13 @@ impl Keyboard {
     }
 
     fn send_command(command: u8) {
-        let mut controller_guard = CONTROLLER.acquire();
-
-        let controller = if let Some(controller) = controller_guard.take() {
-            WaitingToWriteTrait::<u8>::block_until_ready(controller.as_writer())
-                .write(Into::<u8>::into(command))
-        } else {
-            panic!(
-                "Can't process a command without a controller, why is this piece of code running :/"
-            )
-        };
-
-        controller_guard.replace(controller);
+        CONTROLLER.with_move(|controller| {
+            let controller = controller.map(|controller| {
+                WaitingToWriteTrait::<u8>::block_until_ready(controller.as_writer())
+                    .write(Into::<u8>::into(command))
+            });
+            (controller, ())
+        });
     }
 }
 
@@ -153,7 +148,7 @@ impl PS2Device for Keyboard {
             }
             State::ReceivedScanCode(scan_code) => {
                 if !scan_code.is_released {
-                    SCANCODE_BUFFER.with(|buffer| buffer.push(scan_code));
+                    SCANCODE_BUFFER.with_mut_ref(|buffer| buffer.push(scan_code));
                 }
 
                 self.state = State::Idle;

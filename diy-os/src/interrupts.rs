@@ -117,33 +117,30 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
     let byte = {
-        let mut con = crate::ps2::CONTROLLER.acquire();
-
-        match con.take() {
-            Some(controller) => {
-                let (controller, result): (_, u8) =
+        #[allow(clippy::option_if_let_else)] // map_or is a moves, and uses the move value again
+                                             // in the closure
+        crate::ps2::CONTROLLER.with_move(|inital_controller| {
+            if let Some(controller) = inital_controller {
+                let (controller, result) =
                     WaitingToReadTrait::<u8>::try_read(controller.as_reader())
                         .unwrap()
                         .read();
-                con.replace(controller);
-                Some(result)
+
+                (Some(controller), Some(result))
+            } else {
+                (inital_controller, None)
             }
-            None => None,
-        }
+        })
     };
 
     if let Some(byte) = byte {
-        let mut device_guard = crate::ps2::PS1_DEVICE.acquire();
-
-        match device_guard.take() {
-            Some(mut device) => {
+        crate::ps2::PS1_DEVICE.with_mut_ref(|device| {
+            if let Some(device) = device {
                 device.received_byte(byte);
-                device_guard.replace(device);
+            } else {
+                println!("No device 1 diver loaded");
             }
-            None => {
-                println!("No device 1 driver loaded")
-            }
-        }
+        });
     }
 
     unsafe {
