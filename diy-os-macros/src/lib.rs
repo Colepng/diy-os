@@ -4,7 +4,7 @@ extern crate std;
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{DeriveInput, Expr, LitInt};
+use syn::{DeriveInput, Expr};
 
 #[proc_macro_derive(const_to_u8, attributes())]
 pub fn derive_const_to_u8(item: TokenStream) -> TokenStream {

@@ -6,11 +6,8 @@ use x86_64::{
 };
 
 use crate::{
-    gdt, pit, println,
-    ps2::{
-        controller::{Inital, InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
-        devices::PS2Device,
-    },
+    gdt, println,
+    ps2::controller::{InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
     syscalls,
     timer::TIME_KEEPER,
 };

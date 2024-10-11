@@ -1,6 +1,6 @@
 use x86_64::instructions::port::{Port, PortWriteOnly};
 
-use crate::{errors, spinlock::Spinlock};
+use crate::errors;
 
 /// Lets all agree to never touch this in anything but the main cpu thread
 static mut PIT_TAKEN: bool = false;

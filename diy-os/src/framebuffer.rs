@@ -5,7 +5,10 @@ use crate::{
     },
     spinlock::Spinlock,
 };
-use core::{fmt::Write, mem::{Assume, TransmuteFrom}};
+use core::{
+    fmt::Write,
+    mem::{Assume, TransmuteFrom},
+};
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 

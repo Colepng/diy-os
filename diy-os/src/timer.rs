@@ -1,4 +1,3 @@
-use crate::println;
 use crate::spinlock::Spinlock;
 use crate::{errors::validity::InputOutOfRangeInclusive, pit};
 

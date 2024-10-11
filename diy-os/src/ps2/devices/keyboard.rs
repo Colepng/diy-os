@@ -2,14 +2,10 @@ use alloc::vec::Vec;
 
 use crate::{
     collections::queues::LinkedQueue,
-    multitasking::Task,
     println,
     ps2::{
         CONTROLLER,
-        controller::{
-            Command, InitalTrait, PS2Controller, ReadyToReadTrait, ReadyToWriteTrait,
-            WaitingToReadTrait, WaitingToWriteTrait,
-        },
+        controller::{InitalTrait, ReadyToWriteTrait, WaitingToWriteTrait},
     },
     spinlock::Spinlock,
 };
@@ -277,9 +273,9 @@ mod basic {
     impl Commands {
         pub fn respone(&self) -> TypeList2<TypeList2<Ack, Resend>, TypeList2<Echo, Resend>> {
             match self {
-                Commands::SetLed(_) => TypeList2::A(TypeList2::A(Ack)),
-                Commands::Echo => todo!(),
-                Commands::GetOrSetScanCode(_) => todo!(),
+                Self::SetLed(_) => TypeList2::A(TypeList2::A(Ack)),
+                Self::Echo => todo!(),
+                Self::GetOrSetScanCode(_) => todo!(),
             }
         }
     }
