@@ -58,3 +58,20 @@ fn derive_any_command_impl(ast: DeriveInput) -> TokenStream2 {
         impl AnyCommand for #name {}
     }
 }
+
+#[proc_macro_derive(Command)]
+pub fn derive_command(item: TokenStream) -> TokenStream {
+    let input = syn::parse(item).unwrap();
+
+    let generated_impl = derive_command_impl(input);
+
+    generated_impl.into()
+}
+
+fn derive_command_impl(ast: DeriveInput) -> TokenStream2 {
+    let name = ast.ident;
+
+    quote! {
+        impl Command for #name {}
+    }
+}
