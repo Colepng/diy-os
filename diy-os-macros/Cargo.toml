@@ -1,0 +1,15 @@
+cargo-features = ["per-package-target"]
+
+[package]
+name = "diy-os-macros"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+syn = "2.0.79"
+proc-macro2 = { version = "1.0.87", features = ["nightly"] }
+quote = "1.0.37"
+
+[lib]
+proc-macro = true
