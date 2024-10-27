@@ -10,6 +10,8 @@
 #![feature(str_from_raw_parts)]
 #![feature(transmutability)]
 #![feature(strict_provenance_lints)]
+#![feature(slice_ptr_get)]
+#![feature(ptr_metadata)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,

@@ -4,10 +4,12 @@ use crate::{
         graphics::{GraphicBackend, Pixels, TextDrawer},
     },
     spinlock::Spinlock,
+    volatile::{ReadAndWrite, VolatileMutRef, VolatilePtr},
 };
 use core::{
     fmt::Write,
     mem::{Assume, TransmuteFrom},
+    slice,
 };
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
@@ -25,19 +27,19 @@ pub fn init(framebuffer_bootinfo: bootloader_api::info::FrameBuffer) {
 }
 
 pub struct FrameBuffer {
-    info: FrameBufferInfo,    // Info about the frame buffer
-    memio: &'static mut [u8], // the underlying memory mapped IO
-    x: usize,                 // Current pixel in the x axis
-    y: usize,                 // Current pixel in the y axis
+    info: FrameBufferInfo,                // Info about the frame buffer
+    memio: VolatileMutRef<'static, [u8]>, // the underlying memory mapped IO
+    x: usize,                             // Current pixel in the x axis
+    y: usize,                             // Current pixel in the y axis
     write_pixel_fn: fn(&mut FrameBuffer, usize, Color), // Function pointer to the function that
-                              // writes the appropriate pixel format
+                                          // writes the appropriate pixel format
 }
 
 impl FrameBuffer {
     pub fn new(info: FrameBufferInfo, memio: &'static mut [u8]) -> Self {
         Self {
             info,
-            memio,
+            memio: VolatileMutRef::new(memio),
             x: 0,
             y: 0,
             write_pixel_fn: match info.pixel_format {
@@ -50,15 +52,15 @@ impl FrameBuffer {
     }
 
     fn write_bgr_pixel(&mut self, byte_offset: usize, color: Color) {
-        self.memio[byte_offset] = color.blue;
-        self.memio[byte_offset + 1] = color.green;
-        self.memio[byte_offset + 2] = color.red;
+        self.memio.index_mut(byte_offset, color.blue);
+        self.memio.index_mut(byte_offset + 1, color.green);
+        self.memio.index_mut(byte_offset + 2, color.red);
     }
 
     fn write_rgb_pixel(&mut self, byte_offset: usize, color: Color) {
-        self.memio[byte_offset] = color.red;
-        self.memio[byte_offset + 1] = color.green;
-        self.memio[byte_offset + 2] = color.blue;
+        self.memio.index_mut(byte_offset, color.red);
+        self.memio.index_mut(byte_offset + 1, color.green);
+        self.memio.index_mut(byte_offset + 2, color.blue);
     }
 
     fn write_unknown_4byte_pixel(&mut self, byte_offset: usize, color: Color) {
@@ -76,10 +78,10 @@ impl FrameBuffer {
                 <[u8; 4] as TransmuteFrom<u32, { Assume::NOTHING }>>::transmute(color_u32)
             };
 
-            self.memio[byte_offset] = color_u8s[0];
-            self.memio[byte_offset + 1] = color_u8s[1];
-            self.memio[byte_offset + 2] = color_u8s[2];
-            self.memio[byte_offset + 3] = color_u8s[3];
+            self.memio.index_mut(byte_offset, color_u8s[0]);
+            self.memio.index_mut(byte_offset + 1, color_u8s[1]);
+            self.memio.index_mut(byte_offset + 2, color_u8s[2]);
+            self.memio.index_mut(byte_offset + 3, color_u8s[3]);
         }
     }
 }
@@ -139,7 +141,7 @@ impl TextDrawer for FrameBuffer {
     fn scroll(&mut self, amount: Pixels) {
         let number_of_bytes_to_scroll = self.info.bytes_per_pixel * self.info.stride * amount.0;
 
-        let memio_ptr = self.memio.as_mut_ptr();
+        let memio_ptr = self.memio.as_ptr().as_mut_ptr();
 
         // shifts up everything but the last amount of pixels
         unsafe {
@@ -151,7 +153,11 @@ impl TextDrawer for FrameBuffer {
         }
 
         // sets each pixel to black to clear the old pixels
-        self.memio
+        let slice = unsafe {
+            slice::from_raw_parts_mut(self.memio.as_ptr().as_mut_ptr(), self.memio.len())
+        };
+
+        slice
             .iter_mut()
             .rev()
             .take(number_of_bytes_to_scroll)
@@ -198,9 +204,9 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio[2], 255);
-        assert_eq!(fb.memio[1], 255);
-        assert_eq!(fb.memio[0], 100);
+        assert_eq!(fb.memio.index(2), 255);
+        assert_eq!(fb.memio.index(1), 255);
+        assert_eq!(fb.memio.index(0), 100);
     }
     #[test]
     fn plotting_rgb_test() {
@@ -227,9 +233,9 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio[0], 255);
-        assert_eq!(fb.memio[1], 255);
-        assert_eq!(fb.memio[2], 100);
+        assert_eq!(fb.memio.index(0), 255);
+        assert_eq!(fb.memio.index(1), 255);
+        assert_eq!(fb.memio.index(2), 100);
     }
 
     #[test]
@@ -261,8 +267,8 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio[2], 255);
-        assert_eq!(fb.memio[1], 255);
-        assert_eq!(fb.memio[0], 100);
+        assert_eq!(fb.memio.index(2), 255);
+        assert_eq!(fb.memio.index(1), 255);
+        assert_eq!(fb.memio.index(0), 100);
     }
 }
