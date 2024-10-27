@@ -229,8 +229,6 @@ dependencies = [
 [[package]]
 name = "bootloader"
 version = "0.11.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "870f24755a97b8a8b436b243465eb7d4e1aa191369eeab062172eedd74493bcb"
 dependencies = [
  "anyhow 1.0.86 (registry+https://github.com/rust-lang/crates.io-index)",
  "async-process",
@@ -248,8 +246,6 @@ dependencies = [
 [[package]]
 name = "bootloader-boot-config"
 version = "0.11.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4946b6c83b3e9bd91864531025a9719ed0d8c6e7c5db13f694152b5df7deea15"
 dependencies = [
  "serde",
 ]
@@ -333,7 +329,6 @@ dependencies = [
  "lazy_static",
  "linked_list_allocator",
  "noto-sans-mono-bitmap",
- "pc-keyboard",
  "pic8259",
  "thiserror-core",
  "uart_16550",
@@ -770,12 +765,6 @@ name = "parking"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb813b8af86854136c6922af0598d719255ecb2179515e6e7730d468f05c9cae"
-
-[[package]]
-name = "pc-keyboard"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed089a1fbffe3337a1a345501c981f1eb1e47e69de5a40e852433e12953c3174"
 
 [[package]]
 name = "pic8259"

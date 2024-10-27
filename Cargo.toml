@@ -14,7 +14,7 @@ ovmf-prebuilt = "0.1.0-alpha.1"
 
 [build-dependencies]
 diy-os = { path = "diy-os", artifact = "bin", target = "x86_64-unknown-none" }
-bootloader = "0.11.7"
+bootloader = { path = "../bootloader" } 
 
 [[bin]]
 name = "qemu-bios"
