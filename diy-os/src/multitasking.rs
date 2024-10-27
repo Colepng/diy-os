@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use crate::timer::sleep;
 
-const LOOP_TIME: u64 = 3; // length of loop in ms
+const LOOP_TIME: u64 = 1; // length of loop in ms
 
 pub struct TaskRunner {
     tasks: Vec<Box<dyn Task>>,

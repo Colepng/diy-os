@@ -1,18 +1,14 @@
-use alloc::vec::Vec;
-
 use crate::{
     collections::queues::LinkedQueue,
+    human_input_devices::{KEYMAP, Keycode},
     println,
     ps2::{
         CONTROLLER,
         controller::{InitalTrait, ReadyToWriteTrait, WaitingToWriteTrait},
     },
-    spinlock::Spinlock,
 };
 
 use super::PS2Device;
-
-pub static SCANCODE_BUFFER: Spinlock<Vec<ScanCode>> = Spinlock::new(Vec::new());
 
 pub enum State {
     Idle,
@@ -25,10 +21,18 @@ pub enum State {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum ScanCodeSet {
+    Set1,
+    Set2,
+    Set3,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ScanCodeBuilder {
     scan_code: Option<u8>,
     is_released: Option<bool>,
     is_extended: Option<bool>,
+    scan_code_set: Option<ScanCodeSet>,
 }
 
 impl ScanCodeBuilder {
@@ -37,6 +41,7 @@ impl ScanCodeBuilder {
             scan_code: None,
             is_released: None,
             is_extended: None,
+            scan_code_set: None,
         }
     }
 
@@ -45,6 +50,7 @@ impl ScanCodeBuilder {
             scan_code: Some(code),
             is_released: self.is_released,
             is_extended: self.is_extended,
+            scan_code_set: self.scan_code_set,
         }
     }
 
@@ -53,6 +59,7 @@ impl ScanCodeBuilder {
             scan_code: self.scan_code,
             is_released: Some(released),
             is_extended: self.is_extended,
+            scan_code_set: self.scan_code_set,
         }
     }
 
@@ -61,6 +68,16 @@ impl ScanCodeBuilder {
             scan_code: self.scan_code,
             is_released: self.is_released,
             is_extended: Some(extended),
+            scan_code_set: self.scan_code_set,
+        }
+    }
+
+    pub const fn set_set(self, set: ScanCodeSet) -> Self {
+        Self {
+            scan_code: self.scan_code,
+            is_released: self.is_released,
+            is_extended: self.is_extended,
+            scan_code_set: Some(set),
         }
     }
 
@@ -69,6 +86,7 @@ impl ScanCodeBuilder {
             scan_code: self.scan_code.unwrap(),
             is_released: self.is_released.unwrap(),
             is_extended: self.is_extended.unwrap(),
+            scan_code_set: self.scan_code_set.unwrap(),
         }
     }
 }
@@ -78,6 +96,76 @@ pub struct ScanCode {
     pub scan_code: u8,
     is_released: bool,
     is_extended: bool,
+    scan_code_set: ScanCodeSet,
+}
+
+impl From<ScanCode> for Keycode {
+    fn from(value: ScanCode) -> Self {
+        if !matches!(value.scan_code_set, ScanCodeSet::Set2) {
+            panic!("kys");
+        }
+        match value.scan_code {
+            0x01 => Keycode::F9,
+            0x03 => Keycode::F5,
+            0x04 => Keycode::F3,
+            0x05 => Keycode::F1,
+            0x06 => Keycode::F2,
+            0x07 => Keycode::F12,
+            0x09 => Keycode::F10,
+            0x0A => Keycode::F8,
+            0x0B => Keycode::F6,
+            0x0C => Keycode::F4,
+            0x0D => Keycode::Tab,
+            0x0E => Keycode::Grave,
+            0x11 => todo!(), // left alt
+            0x12 => Keycode::Shift,
+            0x14 => todo!(), // left ctrl
+            0x15 => Keycode::Q,
+            0x16 => Keycode::One,
+            0x1A => Keycode::Z,
+            0x1B => Keycode::S,
+            0x1C => Keycode::A,
+            0x1D => Keycode::D,
+            0x1E => Keycode::Two,
+            0x21 => Keycode::C,
+            0x22 => Keycode::X,
+            0x23 => Keycode::D,
+            0x24 => Keycode::E,
+            0x25 => Keycode::Four,
+            0x26 => Keycode::Three,
+            0x29 => Keycode::Space,
+            0x2A => Keycode::V,
+            0x2B => Keycode::F,
+            0x2C => Keycode::T,
+            0x2D => Keycode::R,
+            0x2E => Keycode::Five,
+            0x31 => Keycode::N,
+            0x32 => Keycode::B,
+            0x33 => Keycode::H,
+            0x34 => Keycode::G,
+            0x35 => Keycode::Y,
+            0x36 => Keycode::Six,
+            0x3A => Keycode::M,
+            0x3B => Keycode::J,
+            0x3C => Keycode::U,
+            0x3D => Keycode::Seven,
+            0x3E => Keycode::Eight,
+            0x41 => Keycode::Comma,
+            0x42 => Keycode::K,
+            0x43 => Keycode::I,
+            0x44 => Keycode::O,
+            0x45 => Keycode::Zero,
+            0x46 => Keycode::Nine,
+            0x49 => Keycode::Period,
+            0x4A => Keycode::Backslash,
+            0x4B => Keycode::L,
+            0x4C => Keycode::Semicolon,
+            0x4D => Keycode::P,
+            0x4E => Keycode::Hyphen,
+            0x5A => Keycode::Enter,
+            _ => todo!(),
+        }
+    }
 }
 
 pub struct Keyboard {
@@ -124,13 +212,16 @@ impl PS2Device for Keyboard {
                     match self.incoming_bytes.remove_head() {
                         0xE0 => {
                             self.state = State::ReceivedExtenededCode(
-                                ScanCodeBuilder::new().set_extended(true),
+                                ScanCodeBuilder::new()
+                                    .set_extended(true)
+                                    .set_set(ScanCodeSet::Set2),
                             );
                         }
                         0xF0 => {
                             self.state = State::ReceivedReleasedCode(
                                 ScanCodeBuilder::new()
                                     .set_released(true)
+                                    .set_set(ScanCodeSet::Set2)
                                     .set_extended(false),
                             );
                         }
@@ -140,6 +231,7 @@ impl PS2Device for Keyboard {
                                     .set_code(byte)
                                     .set_extended(false)
                                     .set_released(false)
+                                    .set_set(ScanCodeSet::Set2)
                                     .build(),
                             );
                         }
@@ -147,9 +239,13 @@ impl PS2Device for Keyboard {
                 }
             }
             State::ReceivedScanCode(scan_code) => {
-                if !scan_code.is_released {
-                    SCANCODE_BUFFER.with_mut_ref(|buffer| buffer.push(scan_code));
-                }
+                KEYMAP.with_mut_ref(|keymap| {
+                    if scan_code.is_released {
+                        keymap.release_key(Keycode::from(scan_code));
+                    } else {
+                        keymap.press_key(Keycode::from(scan_code));
+                    }
+                });
 
                 self.state = State::Idle;
             }
@@ -169,6 +265,7 @@ impl PS2Device for Keyboard {
                 self.state = State::ReceivedScanCode(
                     scan_code_builder
                         .set_code(self.incoming_bytes.remove_head())
+                        .set_set(ScanCodeSet::Set2)
                         .build(),
                 );
             }
@@ -182,6 +279,7 @@ impl PS2Device for Keyboard {
                         scan_code_builder
                             .set_released(false)
                             .set_code(new_byte)
+                            .set_set(ScanCodeSet::Set2)
                             .build(),
                     );
                 }

@@ -41,6 +41,7 @@ pub static TIME_KEEPER: Spinlock<TimeKeeper> = Spinlock::new(TimeKeeper::new());
 pub struct TimeKeeper {
     pub sleep_counter: u64,
     pub timer_counter: u64,
+    pub keyboard_counter: u64,
 }
 
 impl TimeKeeper {
@@ -48,12 +49,14 @@ impl TimeKeeper {
         Self {
             sleep_counter: 0,
             timer_counter: 0,
+            keyboard_counter: 0,
         }
     }
 
     pub const fn tick(&mut self) {
         self.sleep_counter = self.sleep_counter.saturating_sub(1);
         self.timer_counter = self.timer_counter.saturating_add(1);
+        self.keyboard_counter = self.keyboard_counter.saturating_add(1);
     }
 }
 

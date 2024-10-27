@@ -5,6 +5,7 @@
 #![feature(naked_functions)]
 #![feature(never_type)]
 #![feature(pointer_is_aligned_to)]
+#![feature(iter_collect_into)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -29,18 +30,14 @@ use core::panic::PanicInfo;
 use diy_os::{
     elf,
     filesystem::ustar,
-    hlt_loop, init,
+    hlt_loop,
+    human_input_devices::{ProccesKeys, STDIN},
+    init,
     multitasking::TaskRunner,
     println,
     ps2::{
-        GenericPS2Controller,
-        controller::PS2Controller,
-        devices::{
-            PS2Device1Task,
-            keyboard::{Keyboard, SCANCODE_BUFFER, ScanCode},
-        },
+        controller::PS2Controller, devices::{keyboard::Keyboard, PS2Device1Task}, GenericPS2Controller
     },
-    spinlock::Spinlock,
     timer::sleep,
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
@@ -74,7 +71,7 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     println!("Hello, world!");
 
-    let elf_file = &ramdisk.get_files()[0];
+    // let elf_file = &ramdisk.get_files()[0];
 
     let gernaric = GenericPS2Controller::new();
 
@@ -93,6 +90,7 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let mut task_runner = TaskRunner::new();
 
     task_runner.add_task(PS2Device1Task);
+    task_runner.add_task(ProccesKeys);
     task_runner.add_task(KernelShell::new());
 
     task_runner.start_running();
@@ -112,58 +110,47 @@ impl KernelShell {
 
 impl diy_os::multitasking::Task for KernelShell {
     fn run(&mut self) {
-        let read_codes = SCANCODE_BUFFER.with_mut_ref(|buffer| {
-            let mut temp = Vec::new();
-            temp.append(buffer);
-            temp
+        STDIN.with_mut_ref(|stdin| {
+            stdin
+                .drain(..stdin.len())
+                .filter_map(|keycode| {
+                    let char = char::from(keycode);
+                    diy_os::print!("{char}");
+                    Some(char)
+                })
+                .collect_into(&mut self.input);
         });
 
-        if !read_codes.is_empty() {
-            read_codes
-                .into_iter()
-                .flat_map(|code| match code.scan_code {
-                    0x16 => Some('1'),
-                    0x1B => Some('S'),
-                    0x1C => Some('A'),
-                    0x1D => Some('W'),
-                    0x23 => Some('D'),
-                    0x29 => Some(' '),
-                    0x45 => Some('0'),
-                    0x5A => Some('\n'),
-                    scan_code => {
-                        diy_os::print!("{scan_code:X}");
-                        None
-                    }
-                })
-                .for_each(|c| {
-                    diy_os::print!("{c}");
-                    self.input.push(c)
-                });
+        if self.input.contains('\n') {
+            let lines = self.input.lines();
 
-            if self.input.contains('\n') {
-                let lines = self.input.lines();
-
-                for line in lines {
-                    let mut words = line.split_whitespace();
-                    let first_word = words.next().unwrap();
+            for line in lines {
+                let mut words = line.split_whitespace();
+                if let Some(first_word) = words.next() {
                     match first_word {
-                        "ASD" => {
-                            let amount = words.next().unwrap().parse().unwrap();
-                            println!("sleeping for {amount}");
+                        "SLEEP" => {
+                            if let Some(word) = words.next() {
+                                let result = word.parse();
 
-                            sleep(amount);
+                                if let Ok(amount) = result {
+                                    println!("sleeping for {amount}");
+                                    sleep(amount);
+                                    println!("done sleeping");
+                                } else {
+                                    println!("pls input a number")
+                                }
+                            }
 
-                            println!("done sleeping");
                         }
-                        "WAD" => {
+                        "PANIC" => {
                             panic!("yo fuck you no more os");
                         }
                         command => println!("{command} is invalid"),
                     }
                 }
-
-                self.input.clear();
             }
+
+            self.input.clear();
         }
     }
 }

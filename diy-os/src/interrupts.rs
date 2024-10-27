@@ -38,6 +38,7 @@ lazy_static! {
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+            idt[InterruptIndex::Suprious.as_u8()].set_handler_fn(spurious_handler);
             idt[0x80]
                 .set_handler_addr(VirtAddr::new(
                     (syscalls::system_call_handler_wrapper as usize)
@@ -62,9 +63,16 @@ pub fn unmask() {
 #[allow(clippy::needless_pass_by_value)]
 fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
     panic!(
-        "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex {:x}",
-        stack_frame, error_code, index
+        "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex dec {index} \nindex hex {index:x}",
+        stack_frame, error_code
     );
+}
+
+extern "x86-interrupt" fn spurious_handler(stack_frame: InterruptStackFrame) {
+    crate::print!("got suprious interrupt assuming nothing bad happend");
+    PICS.with_mut_ref(|pits| {
+        unsafe { pits.notify_end_of_interrupt(InterruptIndex::Suprious.as_u8()) };
+    });
 }
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
@@ -154,6 +162,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
     Keyboard,
+    Suprious = 0x27,
 }
 
 impl InterruptIndex {

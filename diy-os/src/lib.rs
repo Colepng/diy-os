@@ -12,6 +12,8 @@
 #![feature(strict_provenance_lints)]
 #![feature(slice_ptr_get)]
 #![feature(ptr_metadata)]
+#![feature(variant_count)]
+#![feature(iter_collect_into)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -53,6 +55,7 @@ pub mod errors;
 pub mod filesystem;
 pub mod framebuffer;
 pub mod gdt;
+pub mod human_input_devices;
 pub mod interrupts;
 pub mod memory;
 pub mod multitasking;
@@ -63,6 +66,7 @@ pub mod spinlock;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;
+pub mod volatile;
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
