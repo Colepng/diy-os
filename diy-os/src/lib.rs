@@ -40,6 +40,7 @@
 )]
 
 use bootloader_api::BootInfo;
+use log::LOGGER;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
@@ -67,6 +68,7 @@ pub mod syscalls;
 pub mod timer;
 pub mod usermode;
 pub mod volatile;
+pub mod log;
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
@@ -76,12 +78,13 @@ pub enum InitError {
     FailedToSetupSystemTimer(#[from] SystemTimerError),
 }
 
+/// frequency is in hz
 /// # Errors
 /// Will return [`InitError::FailedToSetupHeap`] if it could not map the pages for the heap.
 /// Will also return [`InitError::FailedToSetupSystemTimer`] if the system timer was already owned
 /// # Panics
 /// Will panic if no physical memory offset could be found
-pub fn init(
+pub fn kernel_early(
     boot_info: &'static mut BootInfo,
     frequency: u32,
 ) -> Result<
@@ -92,8 +95,6 @@ pub fn init(
     ),
     InitError,
 > {
-    println!("Entering init");
-
     // Setup Allocator first for error propagation with anyhow
     let offset_addr =
         x86_64::VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap());
@@ -106,24 +107,29 @@ pub fn init(
     allocator::setup_heap(&mut mapper, &mut frame_allocator)
         .map_err(InitError::FailedToSetupHeap)?;
 
+    log::info("Heap setup, can start logging");
+
     if let Some(framebuffer) = boot_info.framebuffer.take() {
         framebuffer::init(framebuffer);
-        println!("Framebuffer Initialized");
+        log::info("Initialized framebuffer");
     }
 
     gdt::init();
-    println!("GDT Initialized");
+    log::info("The GDT was initialized");
 
     interrupts::init_idt();
-    println!("IDT Initialized");
+    log::info("The IDT was initialized");
+
     unsafe { interrupts::PICS.acquire().initialize() };
-    println!("PICS Initialized");
+    log::info("The PIC was initialized");
     interrupts::unmask();
-    println!("Interrupts Unmasked");
+    log::info("Unmasked interrupts");
+
     x86_64::instructions::interrupts::enable();
-    println!("Interrupts Enabled");
+    log::info("Interrupts Enabled");
+
     timer::setup_system_timer(frequency)?;
-    println!("System timer Initialized");
+    log::info("System timer Initialized");
 
     Ok((boot_info, frame_allocator, mapper))
 }

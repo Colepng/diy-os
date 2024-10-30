@@ -328,8 +328,8 @@ pub struct ProccesKeys;
 impl Task for ProccesKeys {
     fn run(&mut self) {
         let duration = TIME_KEEPER.with_mut_ref(|keeper| {
-            let dur = keeper.keyboard_counter;
-            keeper.keyboard_counter = 0;
+            let dur = keeper.keyboard_counter.time.miliseconds;
+            keeper.keyboard_counter.time.reset();
             dur
         });
 
@@ -347,14 +347,14 @@ impl Task for ProccesKeys {
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
-                        state.duration += duration as u16;
-                    } else if state.duration >= 60 {
+                        state.duration += duration.0 as u16;
+                    } else if state.duration >= 600 {
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
                     } else {
-                        state.duration += duration as u16;
+                        state.duration += duration.0 as u16;
                     }
                 });
         })

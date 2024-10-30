@@ -28,17 +28,9 @@ use bootloader_api::{
 
 use core::panic::PanicInfo;
 use diy_os::{
-    elf,
-    filesystem::ustar,
-    hlt_loop,
-    human_input_devices::{ProccesKeys, STDIN},
-    init,
-    multitasking::TaskRunner,
-    println,
-    ps2::{
+    elf, filesystem::ustar, hlt_loop, human_input_devices::{ProccesKeys, STDIN}, kernel_early, log::{self, LogLevel}, multitasking::TaskRunner, println, ps2::{
         controller::PS2Controller, devices::{keyboard::Keyboard, PS2Device1Task}, GenericPS2Controller
-    },
-    timer::sleep,
+    }, timer::sleep
 };
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 
@@ -64,7 +56,7 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
-    let (boot_info, _frame_allocator, _mapper) = init(boot_info, 100)?;
+    let (boot_info, _frame_allocator, _mapper) = kernel_early(boot_info, 1000)?;
 
     let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
     let ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into()?) };
@@ -133,8 +125,9 @@ impl diy_os::multitasking::Task for KernelShell {
                                 let result = word.parse();
 
                                 if let Ok(amount) = result {
-                                    println!("sleeping for {amount}");
+                                    log::trace(alloc::format!("sleeping for {}", amount).leak());
                                     sleep(amount);
+                                    log::trace(alloc::format!("done sleeping for {}", amount).leak());
                                     println!("done sleeping");
                                 } else {
                                     println!("pls input a number")
@@ -144,6 +137,25 @@ impl diy_os::multitasking::Task for KernelShell {
                         }
                         "PANIC" => {
                             panic!("yo fuck you no more os");
+                        }
+                        "LOGS" => {
+                            let log_level = if let Some(level) = words.next() {
+                                match level {
+                                    "ERROR" => LogLevel::Error,
+                                    "WARN" => LogLevel::Warn,
+                                    "INFO" => LogLevel::Info,
+                                    "DEBUG" => LogLevel::Debug,
+                                    "TRACE" => LogLevel::Trace,
+                                    _ => {
+                                        println!("Invalid log level, defauting to debug");
+                                        LogLevel::Debug
+                                    },
+                                }
+                            } else {
+                                LogLevel::Debug
+                            };
+
+                            log::LOGGER.with_ref(|logger| logger.get_events().filter(|event| event.level <= log_level).for_each(|event| println!("{}", event)));
                         }
                         command => println!("{command} is invalid"),
                     }

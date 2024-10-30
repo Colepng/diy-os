@@ -125,7 +125,7 @@ impl From<ScanCode> for Keycode {
             0x1A => Keycode::Z,
             0x1B => Keycode::S,
             0x1C => Keycode::A,
-            0x1D => Keycode::D,
+            0x1D => Keycode::W,
             0x1E => Keycode::Two,
             0x21 => Keycode::C,
             0x22 => Keycode::X,

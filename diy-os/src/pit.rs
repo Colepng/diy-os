@@ -67,7 +67,7 @@ impl PitFrequency {
     const MAX: u32 = Pit::FREQUENCY;
     const MIN: u32 = 19;
 
-    /// .
+    /// frequency is measured in hz
     ///
     /// # Errors
     ///
