@@ -25,7 +25,7 @@ impl TaskRunner {
             })
             .1;
 
-            sleep(LOOP_TIME.saturating_add(took));
+            sleep(LOOP_TIME.saturating_add(took.miliseconds.0));
         }
     }
 }

@@ -1,4 +1,4 @@
-cargo-features = ["profile-rustflags", "edition2024", "per-package-target"]
+cargo-features = ["profile-rustflags", "per-package-target"]
 
 [package]
 name = "diy-os"
