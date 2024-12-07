@@ -23,13 +23,16 @@ lazy_static! {
 }
 
 const STACK_SIZE: usize = 4096 * 5;
-static STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
+// has to be mut otherwise doesn't get maded in or smth
+// TODO: fucking fix this dumbass 
+// just allocate some pages
+static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
 lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            let stack_start = VirtAddr::from_ptr(&raw const STACK);
+            let stack_start = VirtAddr::from_ptr(&raw mut STACK);
             stack_start + STACK_SIZE as u64
         };
         tss
