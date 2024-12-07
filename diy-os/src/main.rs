@@ -27,9 +27,20 @@ use bootloader_api::{
 
 use core::{panic::PanicInfo, task};
 use diy_os::{
-    elf, filesystem::ustar, hlt_loop, human_input_devices::{ProccesKeys, STDIN}, kernel_early, log::{self, LogLevel}, multitasking::{rewrite::{Task}, TaskRunner}, println, ps2::{
-        controller::PS2Controller, devices::{keyboard::Keyboard, PS2Device1Task}, GenericPS2Controller
-    }, timer::sleep
+    elf,
+    filesystem::ustar,
+    hlt_loop,
+    human_input_devices::{ProccesKeys, STDIN},
+    kernel_early,
+    log::{self, LogLevel},
+    multitasking::{TaskRunner, rewrite::Task},
+    println,
+    ps2::{
+        GenericPS2Controller,
+        controller::PS2Controller,
+        devices::{PS2Device1Task, keyboard::Keyboard},
+    },
+    timer::sleep,
 };
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
@@ -254,17 +265,18 @@ fn load_elf_and_jump_into_it(
     // println!("stack2: {:X}", rsp());
 
     let current_stack = rsp();
-    let current_task = Task::allocate_task(0, current_stack);
-
+    let mut current_task = Task::allocate_task(0, current_stack);
 
     let new_stack_ptr = (new_stack) as *mut u64;
 
-    let new_task = Task::allocate_task(0, new_stack - 8*3);
+    let mut new_task = Task::allocate_task(0, new_stack - 8 * 2);
+
+    current_task.next = new_task.as_ref() as *const Task;
+    new_task.next = current_task.as_ref() as *const Task;
 
     unsafe {
         *new_stack_ptr.offset(-1) = task as u64; // rip
-        *new_stack_ptr.offset(-2) = current_task.as_ref() as *const Task as u64; // rax
-        *new_stack_ptr.offset(-3) = new_task.as_ref() as *const Task as u64; // rax
+        *new_stack_ptr.offset(-2) = new_task.as_ref() as *const Task as u64; // rax
     }
 
     loop {
@@ -307,25 +319,24 @@ pub fn task() {
     x86_64::instructions::interrupts::enable();
     loop {
         x86_64::instructions::interrupts::disable();
-        unsafe { core::mem::transmute::<u64, fn()>(switch_to_task as u64)() ;}
+        unsafe {
+            core::mem::transmute::<u64, fn()>(switch_to_task as u64)();
+        }
         x86_64::instructions::interrupts::enable();
-        };    
+    }
 }
 
 // arg1: rdi
 // arg2: rsi
 #[naked]
 pub unsafe extern "sysv64" fn switch_to_task(current_task: &Task, next_task: &Task) {
-    unsafe  {
+    unsafe {
         core::arch::naked_asm!(
-            // "push rax", // save rax on stack
             "push rdi",
-            "push rsi",
             "mov [rdi+8], rsp", // store rsp in task struct
+            "mov rsi, [rdi+16]",
             "mov rsp, [rsi+8]",
             "pop rdi",
-            "pop rsi",
-            // "pop rax", // reload rax
             "ret",
         );
     }
@@ -335,11 +346,9 @@ pub unsafe extern "sysv64" fn switch_to_task(current_task: &Task, next_task: &Ta
 fn rsp() -> u64 {
     let rsp: u64;
 
-    unsafe {
-        core::arch::asm!("mov {stack}, rsp", stack = out(reg) rsp)
-    }
+    unsafe { core::arch::asm!("mov {stack}, rsp", stack = out(reg) rsp) }
 
-    return rsp
+    return rsp;
 }
 
 /// This function is called on panic.
