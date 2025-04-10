@@ -21,7 +21,7 @@ jobs:
     - name: Install Miri
       working-directory: .
       run: |
-          rustup toolchain install nightly --component miri rust-src
+          rustup toolchain install nightly --component miri
           rustup override set nightly
           cargo miri setup
     - name: Install x86_64-unknown-none
