@@ -17,12 +17,6 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
-    - name: Install Miri
-      working-directory: .
-      run: |
-          rustup toolchain install nightly --component miri
-          rustup override set nightly
-          cargo miri setup
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
     - name: Build
@@ -38,12 +32,6 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
-    - name: Install Miri
-      working-directory: .
-      run: |
-          rustup toolchain install nightly --component miri
-          rustup override set nightly
-          cargo miri setup
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
     - name: Run tests
