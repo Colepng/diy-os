@@ -11,7 +11,6 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -26,10 +25,43 @@ jobs:
           cargo miri setup
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
-    # - name: Build
-    #   working-directory: .
-    #   run: cargo build --verbose
+    - name: Build
+      working-directory: .
+      run: cargo build --verbose
+    - name: Build Binary
+      working-directory: ./diy-os
+      run: cargo build --verbose
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./diy-os
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Miri
+      working-directory: .
+      run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+    - name: Install x86_64-unknown-none
+      run: rustup target add x86_64-unknown-none
     - name: Run tests
       run: cargo test --lib --target=x86_64-unknown-linux-gnu
+  miri:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./diy-os
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Miri
+      working-directory: .
+      run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+    - name: Install x86_64-unknown-none
+      run: rustup target add x86_64-unknown-none
     - name: Run Miri
       run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
