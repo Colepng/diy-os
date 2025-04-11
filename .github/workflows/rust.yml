@@ -17,16 +17,13 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
-    - name: Install x86_64-unknown-none
-      run: rustup target add x86_64-unknown-none
     - name: Install Nightly
       working-directory: .
       run: |
-          rustup toolchain install nightly
+          rustup toolchain install nightly --component rust-src
           rustup override set nightly
-    - name: Build
-      working-directory: .
-      run: cargo build --verbose
+    - name: Install x86_64-unknown-none
+      run: rustup target add x86_64-unknown-none
     - name: Build Binary
       working-directory: ./diy-os
       run: cargo build --verbose
@@ -42,7 +39,7 @@ jobs:
     - name: Install Nightly
       working-directory: .
       run: |
-          rustup toolchain install nightly
+          rustup toolchain install nightly --component rust-src
           rustup override set nightly
     - name: Run tests
       run: cargo test --lib --target=x86_64-unknown-linux-gnu
@@ -53,13 +50,13 @@ jobs:
         working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
+    - name: Install x86_64-unknown-none
+      run: rustup target add x86_64-unknown-none
     - name: Install Miri
       working-directory: .
       run: |
-          rustup toolchain install nightly --component miri
+          rustup toolchain install nightly --component miri --component rust-src
           rustup override set nightly
           cargo miri setup
-    - name: Install x86_64-unknown-none
-      run: rustup target add x86_64-unknown-none
     - name: Run Miri
       run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib

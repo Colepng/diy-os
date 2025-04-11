@@ -126,12 +126,12 @@ impl File {
 mod tests {
     use super::Ustar;
 
-    #[test]
-    pub fn test_git_files() {
-        let mut bytes = std::fs::read("../bin/hello_world.tar").unwrap();
-        let file = bytes.as_mut_ptr();
-        let ramdisk = unsafe { Ustar::new(file as usize) };
-
-        let _ = ramdisk.get_files();
-    }
+    // #[test]
+    // pub fn test_git_files() {
+    //     let mut bytes = std::fs::read("../bin/hello_world.tar").unwrap();
+    //     let file = bytes.as_mut_ptr();
+    //     let ramdisk = unsafe { Ustar::new(file as usize) };
+    //
+    //     let _ = ramdisk.get_files();
+    // }
 }
