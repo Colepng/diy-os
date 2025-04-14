@@ -347,14 +347,14 @@ impl Task for ProccesKeys {
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
-                        state.duration += duration.0 as u16;
+                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
                     } else if state.duration >= 600 {
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
                     } else {
-                        state.duration += duration.0 as u16;
+                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
                     }
                 });
         });
