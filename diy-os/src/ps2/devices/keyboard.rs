@@ -169,7 +169,7 @@ impl From<ScanCode> for Keycode {
 }
 
 pub struct Keyboard {
-    commands: LinkedQueue<basic::Commands>,
+    commands: LinkedQueue<Commands>,
     incoming_bytes: LinkedQueue<u8>,
     state: State,
 }
@@ -288,98 +288,19 @@ impl PS2Device for Keyboard {
     }
 }
 
-//
-// mod commands {
-//     use super::TypeList2;
-//
-//     pub(super) trait Response {}
-//     pub(super) trait Command {
-//         fn command_byte(&self) -> u8;
-//         fn process_byte(&self, value: u8) -> u8;
-//     }
-//
-//     /// Command received successfully
-//     pub struct Ok;
-//
-//     /// Some issue with the last command sent
-//     pub struct Resend;
-//
-//     pub type OkOrResend = TypeList2<Ok, Resend>;
-//
-//     // impl Response for OkOrResend {}
-//
-//     pub struct SetLed {
-//         led_state: u8,
-//     }
-//
-//     pub struct Command2<T: Command> {
-//         command: T,
-//         data: u8,
-//         output: u8,
-//     }
-//
-//     impl Command for SetLed {
-//         // type Response = OkOrResend;
-//
-//         fn command_byte(&self) -> u8 {
-//             0xED
-//         }
-//     }
-//
-//     pub struct Echo;
-//
-//     pub struct EchoResponse;
-//
-//     impl Command for Echo {
-//
-//         fn command_byte(&self) -> u8 {
-//             0xEE
-//         }
-//     }
-// }
-
-pub enum TypeList2<A, B> {
-    A(A),
-    B(B),
+#[derive(Copy, Clone, Debug)]
+pub enum Commands {
+    SetLed(u8),
+    Echo,
+    GetOrSetScanCode(u8),
 }
 
-mod basic {
-    use super::TypeList2;
-
-    #[derive(Copy, Clone, Debug)]
-    pub enum Commands {
-        SetLed(u8),
-        Echo,
-        GetOrSetScanCode(u8),
-    }
-
-    impl From<Commands> for u8 {
-        fn from(value: Commands) -> Self {
-            match value {
-                Commands::SetLed(_) => 0xED,
-                Commands::Echo => 0xEE,
-                Commands::GetOrSetScanCode(_) => 0xF0,
-            }
+impl From<Commands> for u8 {
+    fn from(value: Commands) -> Self {
+        match value {
+            Commands::SetLed(_) => 0xED,
+            Commands::Echo => 0xEE,
+            Commands::GetOrSetScanCode(_) => 0xF0,
         }
     }
-
-    impl Commands {
-        pub fn respone(&self) -> TypeList2<TypeList2<Ack, Resend>, TypeList2<Echo, Resend>> {
-            match self {
-                Self::SetLed(_) => TypeList2::A(TypeList2::A(Ack)),
-                Self::Echo => todo!(),
-                Self::GetOrSetScanCode(_) => todo!(),
-            }
-        }
-    }
-
-    pub struct Ack;
-    pub struct Resend;
-    pub struct Echo;
-
-    // pub enum Responses {
-    //     ACK = 0xFA,
-    //     Resend = 0xFE,
-    //     Echo = 0xEE,
-    // }
 }
