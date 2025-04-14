@@ -373,7 +373,7 @@ pub struct Status {
 
 #[derive(Debug)]
 #[repr(u8)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum BufferStatus {
     Empty = 0,
     Full = 1,

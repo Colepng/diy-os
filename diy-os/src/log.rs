@@ -95,7 +95,7 @@ impl Display for Event {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, PartialOrd)]
 pub enum LogLevel {
     Error,
     Warn,
