@@ -119,14 +119,14 @@ impl Keycode {
     // # Safety
     // caller must insure num is a valid variant of [`Keycode`]
     pub unsafe fn from_usize_unchecked(num: usize) -> Self {
-        assert!(num < core::mem::variant_count::<Self>());
-
         const ASSUMPTIONS: Assume = Assume {
             alignment: false,
             lifetimes: false,
             safety: true,
             validity: true,
         };
+
+        assert!(num < core::mem::variant_count::<Self>());
 
         // SAFETY
         //      Validity - all numbers less then the variant count are valid; Checked by the assert
