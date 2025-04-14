@@ -28,12 +28,10 @@ use bootloader_api::{
 
 use core::panic::PanicInfo;
 use diy_os::{
-    elf, filesystem::ustar, hlt_loop, human_input_devices::{ProccesKeys, STDIN}, kernel_early, log::{self, LogLevel}, multitasking::TaskRunner, println, ps2::{
+    filesystem::ustar, hlt_loop, human_input_devices::{ProccesKeys, STDIN}, kernel_early, log::{self, LogLevel}, multitasking::TaskRunner, println, ps2::{
         controller::PS2Controller, devices::{keyboard::Keyboard, PS2Device1Task}, GenericPS2Controller
     }, timer::sleep
 };
-use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
-
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
