@@ -20,7 +20,7 @@ pub enum State {
     GotResponse(u8),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScanCodeSet {
     Set1,
     Set2,
@@ -101,9 +101,8 @@ pub struct ScanCode {
 
 impl From<ScanCode> for Keycode {
     fn from(value: ScanCode) -> Self {
-        if !matches!(value.scan_code_set, ScanCodeSet::Set2) {
-            panic!("kys");
-        }
+        assert!(value.scan_code_set == ScanCodeSet::Set2, "only scan set 2 is Implemented");
+
         match value.scan_code {
             0x01 => Self::F9,
             0x03 => Self::F5,
