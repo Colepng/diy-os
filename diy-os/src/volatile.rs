@@ -18,14 +18,14 @@ pub struct VolatileMutRef<'a, T: ?Sized> {
 
 impl<T: ?Sized> VolatileMutRef<'_, T> {
     /// ptr must be unique and non null and initialized
-    pub fn new(ptr: *mut T) -> Self {
+    pub const fn new(ptr: *mut T) -> Self {
         Self {
             ptr,
             _lifetime: PhantomData,
         }
     }
 
-    pub fn as_ptr(&mut self) -> *mut T {
+    pub const fn as_ptr(&mut self) -> *mut T {
         self.ptr
     }
 }
@@ -81,7 +81,7 @@ impl<T: Copy> VolatileMutRef<'static, [T]> {
     }
 
     #[inline(always)]
-    pub fn len(&mut self) -> usize {
+    pub const fn len(&mut self) -> usize {
         core::ptr::metadata(self.ptr)
     }
 }
@@ -96,7 +96,7 @@ pub struct VolatilePtr<'a, T: ?Sized, A: Access> {
 }
 
 impl<'a, T: ?Sized, A: Access> VolatilePtr<'a, T, A> {
-    pub fn new(reference: &mut T) -> Self {
+    pub const fn new(reference: &mut T) -> Self {
         Self {
             ptr: unsafe { NonNull::new_unchecked(reference) },
             _lifetime: PhantomData,
@@ -104,7 +104,7 @@ impl<'a, T: ?Sized, A: Access> VolatilePtr<'a, T, A> {
         }
     }
 
-    pub fn as_ptr(&mut self) -> NonNull<T> {
+    pub const fn as_ptr(&mut self) -> NonNull<T> {
         self.ptr
     }
 }

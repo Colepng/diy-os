@@ -383,7 +383,7 @@ impl From<bool> for BufferStatus {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and BufferStatus
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, BufferStatus>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 
@@ -398,7 +398,7 @@ impl From<bool> for SystemFlag {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and SystemFlag
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, SystemFlag>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 
@@ -413,7 +413,7 @@ impl From<bool> for CommandOrData {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and CommandOrData
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, CommandOrData>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 

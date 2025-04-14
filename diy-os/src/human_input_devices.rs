@@ -137,7 +137,7 @@ impl Keycode {
 
 impl From<Keycode> for usize {
     fn from(value: Keycode) -> Self {
-        value as usize
+        value as Self
     }
 }
 
