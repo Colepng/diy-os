@@ -4,7 +4,7 @@ use crate::{
         graphics::{GraphicBackend, Pixels, TextDrawer},
     },
     spinlock::Spinlock,
-    volatile::{ReadAndWrite, VolatileMutRef, VolatilePtr},
+    volatile::VolatileMutRef,
 };
 use core::{
     fmt::Write,

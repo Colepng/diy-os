@@ -40,7 +40,6 @@
 )]
 
 use bootloader_api::BootInfo;
-use log::LOGGER;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};

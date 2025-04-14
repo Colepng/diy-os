@@ -1,6 +1,3 @@
-use core::any::Any;
-use core::fmt::Write;
-
 use crate::spinlock::Spinlock;
 use crate::{errors::validity::InputOutOfRangeInclusive, pit};
 

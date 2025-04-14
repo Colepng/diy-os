@@ -19,7 +19,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String};
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
