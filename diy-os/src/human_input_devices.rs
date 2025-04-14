@@ -357,6 +357,6 @@ impl Task for ProccesKeys {
                         state.duration += duration.0 as u16;
                     }
                 });
-        })
+        });
     }
 }
