@@ -317,8 +317,8 @@ pub struct StatusByte(u8);
 impl StatusByte {
     pub fn get_status(&self) -> Status {
         Status {
-            output_buffer_status: self.get_output_buffer_status(),
-            input_buffer_status: self.get_input_buffer_status(),
+            output_buffer: self.get_output_buffer_status(),
+            input_buffer: self.get_input_buffer_status(),
             system_flag: self.get_system_flag(),
             command_or_data: self.get_command_or_data(),
             chipset_specifc_1: self.get_chipset_specifc_1(),
@@ -361,8 +361,8 @@ impl StatusByte {
 #[derive(Debug)]
 #[repr(C)]
 pub struct Status {
-    output_buffer_status: BufferStatus,
-    input_buffer_status: BufferStatus,
+    output_buffer: BufferStatus,
+    input_buffer: BufferStatus,
     system_flag: SystemFlag,
     command_or_data: CommandOrData,
     chipset_specifc_1: bool,

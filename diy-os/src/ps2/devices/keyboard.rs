@@ -86,7 +86,7 @@ impl ScanCodeBuilder {
             scan_code: self.scan_code.unwrap(),
             is_released: self.is_released.unwrap(),
             is_extended: self.is_extended.unwrap(),
-            scan_code_set: self.scan_code_set.unwrap(),
+            set: self.scan_code_set.unwrap(),
         }
     }
 }
@@ -96,12 +96,12 @@ pub struct ScanCode {
     pub scan_code: u8,
     is_released: bool,
     is_extended: bool,
-    scan_code_set: ScanCodeSet,
+    set: ScanCodeSet,
 }
 
 impl From<ScanCode> for Keycode {
     fn from(value: ScanCode) -> Self {
-        assert!(value.scan_code_set == ScanCodeSet::Set2, "only scan set 2 is Implemented");
+        assert!(value.set == ScanCodeSet::Set2, "only scan set 2 is Implemented");
 
         match value.scan_code {
             0x01 => Self::F9,
