@@ -95,7 +95,7 @@ pub struct VolatilePtr<'a, T: ?Sized, A: Access> {
     access: PhantomData<A>,
 }
 
-impl<'a, T: ?Sized, A: Access> VolatilePtr<'a, T, A> {
+impl<T: ?Sized, A: Access> VolatilePtr<'_, T, A> {
     pub const fn new(reference: &mut T) -> Self {
         Self {
             ptr: unsafe { NonNull::new_unchecked(reference) },
