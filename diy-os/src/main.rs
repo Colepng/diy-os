@@ -86,7 +86,7 @@ struct KernelShell {
 }
 
 impl KernelShell {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             input: String::new(),
         }
@@ -98,10 +98,10 @@ impl diy_os::multitasking::Task for KernelShell {
         STDIN.with_mut_ref(|stdin| {
             stdin
                 .drain(..stdin.len())
-                .filter_map(|keycode| {
+                .map(|keycode| {
                     let char = char::from(keycode);
                     diy_os::print!("{char}");
-                    Some(char)
+                    char
                 })
                 .collect_into(&mut self.input);
         });
@@ -118,12 +118,12 @@ impl diy_os::multitasking::Task for KernelShell {
                                 let result = word.parse();
 
                                 if let Ok(amount) = result {
-                                    log::trace(alloc::format!("sleeping for {}", amount).leak());
+                                    log::trace(alloc::format!("sleeping for {amount}").leak());
                                     sleep(amount);
-                                    log::trace(alloc::format!("done sleeping for {}", amount).leak());
+                                    log::trace(alloc::format!("done sleeping for {amount}").leak());
                                     println!("done sleeping");
                                 } else {
-                                    println!("pls input a number")
+                                    println!("pls input a number");
                                 }
                             }
 
@@ -132,8 +132,7 @@ impl diy_os::multitasking::Task for KernelShell {
                             panic!("yo fuck you no more os");
                         }
                         "LOGS" => {
-                            let log_level = if let Some(level) = words.next() {
-                                match level {
+                            let log_level = words.next().map_or(LogLevel::Debug, |level| match level {
                                     "ERROR" => LogLevel::Error,
                                     "WARN" => LogLevel::Warn,
                                     "INFO" => LogLevel::Info,
@@ -143,10 +142,7 @@ impl diy_os::multitasking::Task for KernelShell {
                                         println!("Invalid log level, defauting to debug");
                                         LogLevel::Debug
                                     },
-                                }
-                            } else {
-                                LogLevel::Debug
-                            };
+                                });
 
                             log::LOGGER.with_ref(|logger| logger.get_events().filter(|event| event.level <= log_level).for_each(|event| println!("{}", event)));
                         }
