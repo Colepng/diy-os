@@ -39,7 +39,7 @@ impl FrameBuffer {
     pub fn new(info: FrameBufferInfo, memio: &'static mut [u8]) -> Self {
         Self {
             info,
-            memio: VolatileMutRef::new(memio),
+            memio: VolatileMutRef::new(memio.into()),
             x: 0,
             y: 0,
             write_pixel_fn: match info.pixel_format {
@@ -63,6 +63,7 @@ impl FrameBuffer {
         self.memio.index_mut(byte_offset + 2, color.blue);
     }
 
+    #[allow(clippy::similar_names)]
     fn write_unknown_4byte_pixel(&mut self, byte_offset: usize, color: Color) {
         if let PixelFormat::Unknown {
             red_position,
