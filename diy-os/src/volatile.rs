@@ -1,3 +1,7 @@
+use core::marker::Send;
+use core::marker::Copy;
+use core::marker::Sized;
+use core::assert;
 use core::{marker::PhantomData, ptr::NonNull};
 
 pub trait Access {}
@@ -12,20 +16,20 @@ impl Access for ReadAndWrite {}
 
 // Smart pointer with the same semantics as a mutable ref but all access are volatile
 pub struct VolatileMutRef<'a, T: ?Sized> {
-    ptr: *mut T,
+    ptr: NonNull<T>,
     _lifetime: PhantomData<&'a mut T>,
 }
 
 impl<T: ?Sized> VolatileMutRef<'_, T> {
-    /// ptr must be unique and non null and initialized
-    pub const fn new(ptr: *mut T) -> Self {
+    /// ptr must be unique, non null, and initialized
+    pub const fn new(ptr: NonNull<T>) -> Self {
         Self {
             ptr,
             _lifetime: PhantomData,
         }
     }
 
-    pub const fn as_ptr(&mut self) -> *mut T {
+    pub const fn as_ptr(&mut self) -> NonNull<T> {
         self.ptr
     }
 }
@@ -52,6 +56,10 @@ impl<T: Copy> VolatileMutRef<'static, T> {
 }
 
 impl<T: Copy> VolatileMutRef<'static, [T]> {
+    /// Performs the indexing on container behind the pointer.
+    /// # Panics
+    ///
+    /// May panic if the index is out of bounds.
     pub fn index(&mut self, index: usize) -> T {
         let element_x_ptr = unsafe { self.ptr.cast::<T>().add(index) };
         let len = self.len();
@@ -65,6 +73,10 @@ impl<T: Copy> VolatileMutRef<'static, [T]> {
         unsafe { element_x_ptr.read_volatile() }
     }
 
+    /// Performs the mutable indexing on the container behind the pointer.
+    /// # Panics
+    ///
+    /// May panic if the index is out of bounds.
     pub fn index_mut(&mut self, index: usize, value: T) {
         let element_x_ptr = unsafe { self.ptr.cast::<T>().add(index) };
         let len = self.len();
@@ -80,9 +92,12 @@ impl<T: Copy> VolatileMutRef<'static, [T]> {
         }
     }
 
-    #[inline(always)]
     pub const fn len(&mut self) -> usize {
-        core::ptr::metadata(self.ptr)
+        core::ptr::metadata(self.ptr.as_ptr())
+    }
+
+    pub const fn is_empty(&mut self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -131,22 +146,48 @@ impl<T> VolatilePtr<'_, T, ReadAndWrite> {
     }
 }
 impl<T: Copy> VolatilePtr<'_, [T], ReadAndWrite> {
+    /// Performs the indexing on container behind the pointer.
+    /// # Panics
+    ///
+    /// May panic if the index is out of bounds.
     pub fn index(&mut self, index: usize) -> T {
+        let element_x_ptr = unsafe { self.ptr.cast::<T>().add(index) };
+        let len = self.len();
+        assert!(index < len);
+        assert!(element_x_ptr.is_aligned());
+
+        // SAFETY:
+        //      - T is required to impl copy
+        //      - Ptr is aligned because of assert above
+        //      - Ptr has to be initialized since it points into a slice
+        unsafe { element_x_ptr.read_volatile() }
+    }
+
+    /// Performs the mutable indexing on the container behind the pointer.
+    /// # Panics
+    ///
+    /// May panic if the index is out of bounds.
+    pub fn index_mut(&mut self, index: usize, value: T) {
+        let element_x_ptr = unsafe { self.ptr.cast::<T>().add(index) };
+        let len = self.len();
+
+        assert!(index < len);
+        assert!(element_x_ptr.is_aligned());
+
+        // SAFETY:
+        //      - T is required to impl copy
+        //      - Ptr is aligned because of assert above
         unsafe {
-            self.ptr
-                .byte_add(index * size_of::<T>())
-                .cast::<T>()
-                .read_volatile()
+            element_x_ptr.write_volatile(value);
         }
     }
 
-    pub fn index_mut(&mut self, index: usize, value: T) {
-        unsafe {
-            self.ptr
-                .byte_add(index * size_of::<T>())
-                .cast::<T>()
-                .write_volatile(value);
-        }
+    pub const fn len(&mut self) -> usize {
+        core::ptr::metadata(self.ptr.as_ptr())
+    }
+
+    pub const fn is_empty(&mut self) -> bool {
+        self.len() == 0
     }
 }
 
