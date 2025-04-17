@@ -68,7 +68,7 @@ fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Opti
     );
 }
 
-extern "x86-interrupt" fn spurious_handler(stack_frame: InterruptStackFrame) {
+extern "x86-interrupt" fn spurious_handler(_stack_frame: InterruptStackFrame) {
     crate::print!("got suprious interrupt assuming nothing bad happend");
     PICS.with_mut_ref(|pits| {
         unsafe { pits.notify_end_of_interrupt(InterruptIndex::Suprious.as_u8()) };
