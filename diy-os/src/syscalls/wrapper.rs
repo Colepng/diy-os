@@ -7,7 +7,7 @@ use core::arch::naked_asm;
 ///
 /// rax return
 ///
-#[naked]
+#[unsafe(naked)]
 unsafe extern "sysv64" fn sys_call<Arg1, Arg2, Arg3, Arg4, Arg5>(
     call: u64,
     arg1: Arg1,
@@ -16,15 +16,13 @@ unsafe extern "sysv64" fn sys_call<Arg1, Arg2, Arg3, Arg4, Arg5>(
     arg4: Arg4,
     arg5: Arg5,
 ) {
-    unsafe {
-        naked_asm!("push rcx",
-            "mov rax, rdi",
-            "call {func}",
-            "pop rcx",
-            "ret",
-            func = sym x86_64::instructions::interrupts::software_interrupt::<0x080>,
-        );
-    }
+    naked_asm!("push rcx",
+        "mov rax, rdi",
+        "call {func}",
+        "pop rcx",
+        "ret",
+        func = sym x86_64::instructions::interrupts::software_interrupt::<0x080>,
+    );
 }
 
 pub fn print(str: &str) {

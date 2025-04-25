@@ -8,18 +8,16 @@ use core::arch::naked_asm;
 /// # Safety
 /// Syscall id must be passed through rax
 /// Rax contains return value
-#[naked]
+#[unsafe(naked)]
 pub unsafe extern "sysv64" fn system_call_handler_wrapper() {
     // loop {}
-    unsafe {
-        naked_asm!("mov rcx, rsp
-            sub rsp, 8 // align stack pointer
-            mov rdi, rax
-            call {0}
-            add rsp, 8 // reset stack pointer
-            iretq
-            ", sym system_call_handler);
-    }
+    naked_asm!("mov rcx, rsp
+        sub rsp, 8 // align stack pointer
+        mov rdi, rax
+        call {0}
+        add rsp, 8 // reset stack pointer
+        iretq
+        ", sym system_call_handler);
 }
 
 extern "sysv64" fn system_call_handler(syscall_index: usize) {

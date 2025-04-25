@@ -6,7 +6,6 @@
 #![feature(ascii_char_variants)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(layout_for_ptr)]
-#![feature(naked_functions)]
 #![feature(str_from_raw_parts)]
 #![feature(transmutability)]
 #![feature(strict_provenance_lints)]

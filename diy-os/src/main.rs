@@ -2,7 +2,6 @@
 #![no_main]
 #![feature(optimize_attribute)]
 #![feature(custom_test_frameworks)]
-#![feature(naked_functions)]
 #![feature(never_type)]
 #![feature(pointer_is_aligned_to)]
 #![feature(iter_collect_into)]
