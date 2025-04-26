@@ -200,6 +200,7 @@ trait PitCommand: Into<u8> {}
 ///2            Read back timer channel 1 (1 = yes, 0 = no)
 ///1            Read back timer channel 0 (1 = yes, 0 = no)
 ///0            Reserved (should be clear)
+#[allow(clippy::too_long_first_doc_paragraph)]
 pub struct ReadBackCommand(u8);
 
 #[derive(Default)]
@@ -283,6 +284,7 @@ impl Into<u8> for ReadBackCommand {
 ///                 1 1 1 = Mode 3 (square wave generator, same as 011b)
 /// 0            BCD/Binary mode: 0 = 16-bit binary, 1 = four-digit BCD
 #[repr(transparent)]
+#[allow(clippy::too_long_first_doc_paragraph)]
 pub struct ReadBackStatusByte(u8);
 
 impl ReadBackStatusByte {
@@ -352,6 +354,7 @@ pub enum Channel {
 }
 
 impl Channel {
+    #[allow(dead_code)]
     const BITMASK: u8 = 0b1100_0000;
 
     /// # Safety

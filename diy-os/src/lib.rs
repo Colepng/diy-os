@@ -35,7 +35,8 @@
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
     clippy::todo,
-    clippy::explicit_deref_methods
+    clippy::explicit_deref_methods,
+    clippy::missing_panics_doc,
 )]
 
 use bootloader_api::BootInfo;

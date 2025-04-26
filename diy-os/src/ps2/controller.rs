@@ -25,6 +25,7 @@ pub trait State {}
 pub struct Inital;
 impl State for Inital {}
 
+#[allow(private_bounds)]
 pub trait InitalTrait: PS2ControllerInternal {
     type Reader: WaitingToReadTrait<u8>;
     type Writer: WaitingToWriteTrait<u8>;
@@ -32,6 +33,10 @@ pub trait InitalTrait: PS2ControllerInternal {
     fn into_reader(self) -> Self::Reader;
     fn into_writer(self) -> Self::Writer;
 
+    /// Reset the chain of types.
+    ///
+    /// # Safety
+    /// [`I`] must be the same type as the start of the chain
     unsafe fn reset_chain<I: InitalTrait>(self) -> I;
 }
 
@@ -45,6 +50,11 @@ pub trait WaitingToReadTrait<B: From<u8>> {
 
     fn block_until_ready(self) -> Self::Ready;
 
+    /// Tries to enter ready to read state.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the controller is not ready.
     fn try_read(self) -> Result<Self::Ready, Self>
     where
         Self: Sized;
@@ -71,6 +81,11 @@ pub trait WaitingToWriteTrait<B: Into<u8>> {
 
     fn block_until_ready(self) -> Self::Ready;
 
+    /// Tries to enter ready to write state.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the controller is not ready.
     fn try_read(self) -> Result<Self::Ready, Self>
     where
         Self: Sized;
@@ -96,6 +111,7 @@ trait PS2ControllerInternal {
     fn into_command_sender_with_response(self) -> Self::CommandSenderWithResponse;
     fn into_command_sender_with_value(self) -> Self::CommandSenderWithValue;
 
+    #[allow(dead_code)]
     fn read_status_byte(&mut self) -> StatusByte;
 }
 
@@ -130,6 +146,7 @@ pub trait CommandSenderWithValueTrait {
     fn send_command_with_value<C: CommandWithValue>(self, command: C) -> Self::Writer<C::Value>;
 }
 
+#[allow(private_bounds, clippy::too_many_lines)]
 pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
     fn initialize(self) -> Self
     where

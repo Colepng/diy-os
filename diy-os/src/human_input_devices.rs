@@ -116,8 +116,15 @@ pub enum Keycode {
 }
 
 impl Keycode {
-    // # Safety
-    // caller must insure num is a valid variant of [`Keycode`]
+    /// Creates [`Keycode`] from a usize
+    ///
+    /// # Safety
+    ///
+    /// Caller must insure num is a valid variant of [`Keycode`]
+    /// # Panics
+    ///
+    /// Panics if safety was broken.
+    ///
     pub unsafe fn from_usize_unchecked(num: usize) -> Self {
         const ASSUMPTIONS: Assume = Assume {
             alignment: false,
@@ -142,6 +149,7 @@ impl From<Keycode> for usize {
 }
 
 impl From<Keycode> for char {
+    #[allow(clippy::too_many_lines)]
     fn from(value: Keycode) -> Self {
         match value {
             Keycode::A => 'A',

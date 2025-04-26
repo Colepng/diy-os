@@ -21,8 +21,11 @@ pub struct VolatileMutRef<'a, T: ?Sized> {
 }
 
 impl<T: ?Sized> VolatileMutRef<'_, T> {
-    /// ptr must be unique, non null, and initialized
-    pub const fn new(ptr: NonNull<T>) -> Self {
+    /// Creates a new [`VolatileMutRef<T>`].
+    ///
+    /// # Safety
+    /// [`ptr`] must be unique, initialized, and well aligned
+    pub const unsafe fn new(ptr: NonNull<T>) -> Self {
         Self {
             ptr,
             _lifetime: PhantomData,
@@ -35,6 +38,11 @@ impl<T: ?Sized> VolatileMutRef<'_, T> {
 }
 
 impl<T: Copy> VolatileMutRef<'static, T> {
+    /// Reads the underlying pointer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any safety violations have occurred
     pub fn read(&mut self) -> T {
         assert!(self.ptr.is_aligned());
 
@@ -45,6 +53,11 @@ impl<T: Copy> VolatileMutRef<'static, T> {
         unsafe { self.ptr.read_volatile() }
     }
 
+    /// Writes to the underlying pointer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any safety violations have occurred
     pub fn write(&mut self, value: T) {
         // SAFETY:
         //      - T is required to impl copy

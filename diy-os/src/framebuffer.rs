@@ -39,7 +39,7 @@ impl FrameBuffer {
     pub fn new(info: FrameBufferInfo, memio: &'static mut [u8]) -> Self {
         Self {
             info,
-            memio: VolatileMutRef::new(memio.into()),
+            memio: unsafe { VolatileMutRef::new(memio.into()) },
             x: 0,
             y: 0,
             write_pixel_fn: match info.pixel_format {

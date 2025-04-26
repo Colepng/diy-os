@@ -95,6 +95,7 @@ impl ScanCodeBuilder {
 pub struct ScanCode {
     pub scan_code: u8,
     is_released: bool,
+    #[allow(dead_code)]
     is_extended: bool,
     set: ScanCodeSet,
 }
