@@ -25,7 +25,7 @@ impl ConfigurationByte {
         self.0 & (1 << bit) != 0
     }
 
-    fn set_bit(&mut self, bit: u8, value: bool) {
+    const fn set_bit(&mut self, bit: u8, value: bool) {
         if value {
             self.0 |= 1 << bit;
         } else {
@@ -109,7 +109,7 @@ pub struct UnknownPurpose(pub u8);
 
 impl From<u8> for UnknownPurpose {
     fn from(value: u8) -> Self {
-        UnknownPurpose(value)
+        Self(value)
     }
 }
 
@@ -151,6 +151,7 @@ impl From<u8> for ControllerTestResult {
 impl Response for ControllerTestResult {}
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Config {
     first_port_interrupt: EnabledOrDisabled,
     second_port_interrupt: EnabledOrDisabled,

@@ -116,17 +116,24 @@ pub enum Keycode {
 }
 
 impl Keycode {
-    // # Safety
-    // caller must insure num is a valid variant of [`Keycode`]
+    /// Creates [`Keycode`] from a usize
+    ///
+    /// # Safety
+    ///
+    /// Caller must insure num is a valid variant of [`Keycode`]
+    /// # Panics
+    ///
+    /// Panics if safety was broken.
+    ///
     pub unsafe fn from_usize_unchecked(num: usize) -> Self {
-        assert!(num < core::mem::variant_count::<Self>());
-
         const ASSUMPTIONS: Assume = Assume {
             alignment: false,
             lifetimes: false,
             safety: true,
             validity: true,
         };
+
+        assert!(num < core::mem::variant_count::<Self>());
 
         // SAFETY
         //      Validity - all numbers less then the variant count are valid; Checked by the assert
@@ -137,11 +144,12 @@ impl Keycode {
 
 impl From<Keycode> for usize {
     fn from(value: Keycode) -> Self {
-        value as usize
+        value as Self
     }
 }
 
 impl From<Keycode> for char {
+    #[allow(clippy::too_many_lines)]
     fn from(value: Keycode) -> Self {
         match value {
             Keycode::A => 'A',
@@ -347,16 +355,16 @@ impl Task for ProccesKeys {
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
-                        state.duration += duration.0 as u16;
+                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
                     } else if state.duration >= 600 {
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
                     } else {
-                        state.duration += duration.0 as u16;
+                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
                     }
                 });
-        })
+        });
     }
 }

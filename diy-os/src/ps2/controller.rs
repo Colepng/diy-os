@@ -25,6 +25,7 @@ pub trait State {}
 pub struct Inital;
 impl State for Inital {}
 
+#[allow(private_bounds)]
 pub trait InitalTrait: PS2ControllerInternal {
     type Reader: WaitingToReadTrait<u8>;
     type Writer: WaitingToWriteTrait<u8>;
@@ -32,6 +33,10 @@ pub trait InitalTrait: PS2ControllerInternal {
     fn into_reader(self) -> Self::Reader;
     fn into_writer(self) -> Self::Writer;
 
+    /// Reset the chain of types.
+    ///
+    /// # Safety
+    /// [`I`] must be the same type as the start of the chain
     unsafe fn reset_chain<I: InitalTrait>(self) -> I;
 }
 
@@ -45,6 +50,11 @@ pub trait WaitingToReadTrait<B: From<u8>> {
 
     fn block_until_ready(self) -> Self::Ready;
 
+    /// Tries to enter ready to read state.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the controller is not ready.
     fn try_read(self) -> Result<Self::Ready, Self>
     where
         Self: Sized;
@@ -71,6 +81,11 @@ pub trait WaitingToWriteTrait<B: Into<u8>> {
 
     fn block_until_ready(self) -> Self::Ready;
 
+    /// Tries to enter ready to write state.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the controller is not ready.
     fn try_read(self) -> Result<Self::Ready, Self>
     where
         Self: Sized;
@@ -96,6 +111,7 @@ trait PS2ControllerInternal {
     fn into_command_sender_with_response(self) -> Self::CommandSenderWithResponse;
     fn into_command_sender_with_value(self) -> Self::CommandSenderWithValue;
 
+    #[allow(dead_code)]
     fn read_status_byte(&mut self) -> StatusByte;
 }
 
@@ -130,6 +146,7 @@ pub trait CommandSenderWithValueTrait {
     fn send_command_with_value<C: CommandWithValue>(self, command: C) -> Self::Writer<C::Value>;
 }
 
+#[allow(private_bounds, clippy::too_many_lines)]
 pub trait PS2Controller: InitalTrait + PS2ControllerInternal {
     fn initialize(self) -> Self
     where
@@ -317,8 +334,8 @@ pub struct StatusByte(u8);
 impl StatusByte {
     pub fn get_status(&self) -> Status {
         Status {
-            output_buffer_status: self.get_output_buffer_status(),
-            input_buffer_status: self.get_input_buffer_status(),
+            output_buffer: self.get_output_buffer_status(),
+            input_buffer: self.get_input_buffer_status(),
             system_flag: self.get_system_flag(),
             command_or_data: self.get_command_or_data(),
             chipset_specifc_1: self.get_chipset_specifc_1(),
@@ -361,8 +378,8 @@ impl StatusByte {
 #[derive(Debug)]
 #[repr(C)]
 pub struct Status {
-    output_buffer_status: BufferStatus,
-    input_buffer_status: BufferStatus,
+    output_buffer: BufferStatus,
+    input_buffer: BufferStatus,
     system_flag: SystemFlag,
     command_or_data: CommandOrData,
     chipset_specifc_1: bool,
@@ -373,7 +390,7 @@ pub struct Status {
 
 #[derive(Debug)]
 #[repr(u8)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum BufferStatus {
     Empty = 0,
     Full = 1,
@@ -383,7 +400,7 @@ impl From<bool> for BufferStatus {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and BufferStatus
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, BufferStatus>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 
@@ -398,7 +415,7 @@ impl From<bool> for SystemFlag {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and SystemFlag
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, SystemFlag>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 
@@ -413,7 +430,7 @@ impl From<bool> for CommandOrData {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and CommandOrData
         // since a bool must be a 0 or 1
-        unsafe { core::mem::transmute::<bool, CommandOrData>(value) }
+        unsafe { core::mem::transmute::<bool, Self>(value) }
     }
 }
 

@@ -6,7 +6,6 @@
 #![feature(ascii_char_variants)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(layout_for_ptr)]
-#![feature(naked_functions)]
 #![feature(str_from_raw_parts)]
 #![feature(transmutability)]
 #![feature(strict_provenance_lints)]
@@ -36,11 +35,11 @@
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
     clippy::todo,
-    clippy::explicit_deref_methods
+    clippy::explicit_deref_methods,
+    clippy::missing_panics_doc,
 )]
 
 use bootloader_api::BootInfo;
-use log::LOGGER;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};

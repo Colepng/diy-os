@@ -1,6 +1,3 @@
-use core::any::Any;
-use core::fmt::Write;
-
 use crate::spinlock::Spinlock;
 use crate::{errors::validity::InputOutOfRangeInclusive, pit};
 
@@ -49,7 +46,7 @@ impl core::ops::Add for Miliseconds {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Miliseconds(self.0 + rhs.0)
+        Self(self.0 + rhs.0)
     }
 }
 
@@ -84,7 +81,7 @@ impl Time {
         self.miliseconds = new_ms;
     }
 
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.seconds = Seconds(0);
         self.miliseconds = Miliseconds(0);
     }

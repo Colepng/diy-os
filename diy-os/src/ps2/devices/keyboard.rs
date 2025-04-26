@@ -20,7 +20,7 @@ pub enum State {
     GotResponse(u8),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScanCodeSet {
     Set1,
     Set2,
@@ -81,12 +81,12 @@ impl ScanCodeBuilder {
         }
     }
 
-    pub fn build(self) -> ScanCode {
+    pub const fn build(self) -> ScanCode {
         ScanCode {
             scan_code: self.scan_code.unwrap(),
             is_released: self.is_released.unwrap(),
             is_extended: self.is_extended.unwrap(),
-            scan_code_set: self.scan_code_set.unwrap(),
+            set: self.scan_code_set.unwrap(),
         }
     }
 }
@@ -95,81 +95,81 @@ impl ScanCodeBuilder {
 pub struct ScanCode {
     pub scan_code: u8,
     is_released: bool,
+    #[allow(dead_code)]
     is_extended: bool,
-    scan_code_set: ScanCodeSet,
+    set: ScanCodeSet,
 }
 
 impl From<ScanCode> for Keycode {
     fn from(value: ScanCode) -> Self {
-        if !matches!(value.scan_code_set, ScanCodeSet::Set2) {
-            panic!("kys");
-        }
+        assert!(value.set == ScanCodeSet::Set2, "only scan set 2 is Implemented");
+
         match value.scan_code {
-            0x01 => Keycode::F9,
-            0x03 => Keycode::F5,
-            0x04 => Keycode::F3,
-            0x05 => Keycode::F1,
-            0x06 => Keycode::F2,
-            0x07 => Keycode::F12,
-            0x09 => Keycode::F10,
-            0x0A => Keycode::F8,
-            0x0B => Keycode::F6,
-            0x0C => Keycode::F4,
-            0x0D => Keycode::Tab,
-            0x0E => Keycode::Grave,
+            0x01 => Self::F9,
+            0x03 => Self::F5,
+            0x04 => Self::F3,
+            0x05 => Self::F1,
+            0x06 => Self::F2,
+            0x07 => Self::F12,
+            0x09 => Self::F10,
+            0x0A => Self::F8,
+            0x0B => Self::F6,
+            0x0C => Self::F4,
+            0x0D => Self::Tab,
+            0x0E => Self::Grave,
             0x11 => todo!(), // left alt
-            0x12 => Keycode::Shift,
+            0x12 => Self::Shift,
             0x14 => todo!(), // left ctrl
-            0x15 => Keycode::Q,
-            0x16 => Keycode::One,
-            0x1A => Keycode::Z,
-            0x1B => Keycode::S,
-            0x1C => Keycode::A,
-            0x1D => Keycode::W,
-            0x1E => Keycode::Two,
-            0x21 => Keycode::C,
-            0x22 => Keycode::X,
-            0x23 => Keycode::D,
-            0x24 => Keycode::E,
-            0x25 => Keycode::Four,
-            0x26 => Keycode::Three,
-            0x29 => Keycode::Space,
-            0x2A => Keycode::V,
-            0x2B => Keycode::F,
-            0x2C => Keycode::T,
-            0x2D => Keycode::R,
-            0x2E => Keycode::Five,
-            0x31 => Keycode::N,
-            0x32 => Keycode::B,
-            0x33 => Keycode::H,
-            0x34 => Keycode::G,
-            0x35 => Keycode::Y,
-            0x36 => Keycode::Six,
-            0x3A => Keycode::M,
-            0x3B => Keycode::J,
-            0x3C => Keycode::U,
-            0x3D => Keycode::Seven,
-            0x3E => Keycode::Eight,
-            0x41 => Keycode::Comma,
-            0x42 => Keycode::K,
-            0x43 => Keycode::I,
-            0x44 => Keycode::O,
-            0x45 => Keycode::Zero,
-            0x46 => Keycode::Nine,
-            0x49 => Keycode::Period,
-            0x4A => Keycode::Backslash,
-            0x4B => Keycode::L,
-            0x4C => Keycode::Semicolon,
-            0x4D => Keycode::P,
-            0x4E => Keycode::Hyphen,
-            0x5A => Keycode::Enter,
+            0x15 => Self::Q,
+            0x16 => Self::One,
+            0x1A => Self::Z,
+            0x1B => Self::S,
+            0x1C => Self::A,
+            0x1D => Self::W,
+            0x1E => Self::Two,
+            0x21 => Self::C,
+            0x22 => Self::X,
+            0x23 => Self::D,
+            0x24 => Self::E,
+            0x25 => Self::Four,
+            0x26 => Self::Three,
+            0x29 => Self::Space,
+            0x2A => Self::V,
+            0x2B => Self::F,
+            0x2C => Self::T,
+            0x2D => Self::R,
+            0x2E => Self::Five,
+            0x31 => Self::N,
+            0x32 => Self::B,
+            0x33 => Self::H,
+            0x34 => Self::G,
+            0x35 => Self::Y,
+            0x36 => Self::Six,
+            0x3A => Self::M,
+            0x3B => Self::J,
+            0x3C => Self::U,
+            0x3D => Self::Seven,
+            0x3E => Self::Eight,
+            0x41 => Self::Comma,
+            0x42 => Self::K,
+            0x43 => Self::I,
+            0x44 => Self::O,
+            0x45 => Self::Zero,
+            0x46 => Self::Nine,
+            0x49 => Self::Period,
+            0x4A => Self::Backslash,
+            0x4B => Self::L,
+            0x4C => Self::Semicolon,
+            0x4D => Self::P,
+            0x4E => Self::Hyphen,
+            0x5A => Self::Enter,
             _ => todo!(),
         }
     }
 }
 
 pub struct Keyboard {
-    commands: LinkedQueue<basic::Commands>,
+    commands: LinkedQueue<Commands>,
     incoming_bytes: LinkedQueue<u8>,
     state: State,
 }
@@ -288,98 +288,19 @@ impl PS2Device for Keyboard {
     }
 }
 
-//
-// mod commands {
-//     use super::TypeList2;
-//
-//     pub(super) trait Response {}
-//     pub(super) trait Command {
-//         fn command_byte(&self) -> u8;
-//         fn process_byte(&self, value: u8) -> u8;
-//     }
-//
-//     /// Command received successfully
-//     pub struct Ok;
-//
-//     /// Some issue with the last command sent
-//     pub struct Resend;
-//
-//     pub type OkOrResend = TypeList2<Ok, Resend>;
-//
-//     // impl Response for OkOrResend {}
-//
-//     pub struct SetLed {
-//         led_state: u8,
-//     }
-//
-//     pub struct Command2<T: Command> {
-//         command: T,
-//         data: u8,
-//         output: u8,
-//     }
-//
-//     impl Command for SetLed {
-//         // type Response = OkOrResend;
-//
-//         fn command_byte(&self) -> u8 {
-//             0xED
-//         }
-//     }
-//
-//     pub struct Echo;
-//
-//     pub struct EchoResponse;
-//
-//     impl Command for Echo {
-//
-//         fn command_byte(&self) -> u8 {
-//             0xEE
-//         }
-//     }
-// }
-
-pub enum TypeList2<A, B> {
-    A(A),
-    B(B),
+#[derive(Copy, Clone, Debug)]
+pub enum Commands {
+    SetLed(u8),
+    Echo,
+    GetOrSetScanCode(u8),
 }
 
-mod basic {
-    use super::TypeList2;
-
-    #[derive(Copy, Clone, Debug)]
-    pub enum Commands {
-        SetLed(u8),
-        Echo,
-        GetOrSetScanCode(u8),
-    }
-
-    impl From<Commands> for u8 {
-        fn from(value: Commands) -> Self {
-            match value {
-                Commands::SetLed(_) => 0xED,
-                Commands::Echo => 0xEE,
-                Commands::GetOrSetScanCode(_) => 0xF0,
-            }
+impl From<Commands> for u8 {
+    fn from(value: Commands) -> Self {
+        match value {
+            Commands::SetLed(_) => 0xED,
+            Commands::Echo => 0xEE,
+            Commands::GetOrSetScanCode(_) => 0xF0,
         }
     }
-
-    impl Commands {
-        pub fn respone(&self) -> TypeList2<TypeList2<Ack, Resend>, TypeList2<Echo, Resend>> {
-            match self {
-                Self::SetLed(_) => TypeList2::A(TypeList2::A(Ack)),
-                Self::Echo => todo!(),
-                Self::GetOrSetScanCode(_) => todo!(),
-            }
-        }
-    }
-
-    pub struct Ack;
-    pub struct Resend;
-    pub struct Echo;
-
-    // pub enum Responses {
-    //     ACK = 0xFA,
-    //     Resend = 0xFE,
-    //     Echo = 0xEE,
-    // }
 }

@@ -98,6 +98,7 @@ pub enum ObjectType {
 /// Identifies the target architecture
 #[derive(Debug)]
 #[repr(u16)]
+#[allow(clippy::too_long_first_doc_paragraph)]
 pub enum Machine {
     None = 0x00,
     ATAndTWE32100 = 0x01,
