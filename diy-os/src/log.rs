@@ -3,7 +3,7 @@ use core::fmt::Display;
 use alloc::vec::Vec;
 
 use crate::spinlock::Spinlock;
-use crate::timer::{Time, TIME_KEEPER};
+use crate::timer::{TIME_KEEPER, Time};
 
 pub static LOGGER: Spinlock<Logger> = Spinlock::new(Logger::new());
 
@@ -43,9 +43,7 @@ pub struct Logger {
 
 impl Logger {
     pub const fn new() -> Self {
-        Self {
-            events: Vec::new(),
-        }
+        Self { events: Vec::new() }
     }
 
     fn log(&mut self, text: &'static str, level: LogLevel) {
@@ -91,7 +89,10 @@ pub struct Event {
 
 impl Display for Event {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("{}, {:?}: {}", self.time, self.level, self.text))
+        f.write_fmt(format_args!(
+            "{}, {:?}: {}",
+            self.time, self.level, self.text
+        ))
     }
 }
 

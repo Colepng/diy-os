@@ -40,50 +40,134 @@ pub static TIME_KEEPER: Spinlock<TimeKeeper> = Spinlock::new(TimeKeeper::new());
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
+pub struct Seconds(pub u64);
+
+#[derive(Clone, Copy, Debug)]
+#[repr(transparent)]
 pub struct Miliseconds(pub u64);
 
-impl core::ops::Add for Miliseconds {
+impl<T: Into<Self>> core::ops::Add<T> for Miliseconds {
     type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
+    fn add(self, rhs: T) -> Self::Output {
+        Self(self.0 + rhs.into().0)
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
-pub struct Seconds(pub u64);
+pub struct Microseconds(pub u64);
 
-#[derive(Clone, Copy)]
+impl<T: Into<Self>> core::ops::Add<T> for Microseconds {
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        Self(self.0 + rhs.into().0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct Nanoseconds(pub u64);
+
+impl<T: Into<Self>> core::ops::Add<T> for Nanoseconds {
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        Self(self.0 + rhs.into().0)
+    }
+}
+
+impl<T: Into<Self>> core::ops::Sub<T> for Nanoseconds {
+    type Output = Self;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        Self(self.0 - rhs.into().0)
+    }
+}
+
+impl From<Nanoseconds> for Seconds {
+    fn from(value: Nanoseconds) -> Self {
+        Self(value.0/1_000_000_000)
+    }
+}
+
+impl From<Nanoseconds> for Miliseconds {
+    fn from(value: Nanoseconds) -> Self {
+        Self(value.0/1_000_000)
+    }
+}
+
+impl From<Nanoseconds> for Microseconds {
+    fn from(value: Nanoseconds) -> Self {
+        Self(value.0/1_000)
+    }
+}
+
+
+impl From<Seconds> for Nanoseconds {
+    fn from(value: Seconds) -> Self {
+        Self(value.0 * 1_000_000_000)
+    }
+}
+
+impl From<Miliseconds> for Nanoseconds {
+    fn from(value: Miliseconds) -> Self {
+        Self(value.0 * 1_000_000)
+    }
+}
+
+impl From<Microseconds> for Nanoseconds {
+    fn from(value: Microseconds) -> Self {
+        Self(value.0 * 1_000)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Time {
-    pub miliseconds: Miliseconds,
-    pub seconds: Seconds,
+    nanoseconds: Nanoseconds,
+}
+
+impl<T: Into<Nanoseconds>> From<T> for Time {
+    fn from(value: T) -> Self {
+        Self { nanoseconds: value.into() }
+    }
+}
+
+impl<T: Into<Nanoseconds>> core::ops::Add<T> for Time {
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        Self { nanoseconds: self.nanoseconds + rhs }
+    }
+}
+
+impl core::ops::AddAssign for Time {
+    fn add_assign(&mut self, rhs: Self) {
+        self.nanoseconds = self.nanoseconds + rhs.nanoseconds;
+    }
 }
 
 impl core::fmt::Display for Time {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("{}:{}", self.seconds.0, self.miliseconds.0))
+        let seconds: Seconds = self.nanoseconds.into();
+        let milis: Miliseconds = (self.nanoseconds - seconds).into(); 
+        let micros: Microseconds = (self.nanoseconds - seconds - milis).into();
+        f.write_fmt(format_args!("{}:{}:{}:{}", seconds.0, milis.0, micros.0, (self.nanoseconds - seconds - milis - micros).0))
     }
 }
 
 impl Time {
+    pub const ZERO: Self = Self::new();
+    
     pub const fn new() -> Self {
         Self {
-            miliseconds: Miliseconds(0),
-            seconds: Seconds(0),
+            nanoseconds: Nanoseconds(0)
         }
-    }
-    pub fn add(&mut self, ms: Miliseconds) {
-        let mut new_ms = self.miliseconds + ms;
-        let seconds = new_ms.0 / 1000;
-        self.seconds.0 += seconds;
-        new_ms.0 -= seconds * 1000;
-        self.miliseconds = new_ms;
     }
 
     pub const fn reset(&mut self) {
-        self.seconds = Seconds(0);
-        self.miliseconds = Miliseconds(0);
+        self.nanoseconds.0 = 0;
     }
 }
 
@@ -100,29 +184,32 @@ impl Counter {
 }
 
 pub struct TimeKeeper {
-    pub tick_amount: Miliseconds,
+    pub tick_amount: Nanoseconds,
     pub sleep_counter: u64,
     pub timer_counter: Counter,
     pub keyboard_counter: Counter,
-    pub log_counter: Counter, 
+    pub log_counter: Counter,
+    pub schedule_counter: Counter,
 }
 
 impl TimeKeeper {
     pub const fn new() -> Self {
         Self {
-            tick_amount: Miliseconds(1),
+            tick_amount: Nanoseconds(1_000_000),
             sleep_counter: 0,
             timer_counter: Counter::new(),
             keyboard_counter: Counter::new(),
             log_counter: Counter::new(),
+            schedule_counter: Counter::new(),
         }
     }
 
     pub fn tick(&mut self) {
         self.sleep_counter = self.sleep_counter.saturating_sub(1);
-        self.timer_counter.time.add(self.tick_amount);
-        self.keyboard_counter.time.add(self.tick_amount);
-        self.log_counter.time.add(self.tick_amount);
+        self.timer_counter.time += self.tick_amount.into();
+        self.keyboard_counter.time += self.tick_amount.into();
+        self.log_counter.time += self.tick_amount.into();
+        self.schedule_counter.time += self.tick_amount.into();
     }
 }
 

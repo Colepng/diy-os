@@ -1,6 +1,6 @@
 // use keyboard::Command;
 
-use crate::multitasking::Task;
+use crate::multitasking::schedule;
 
 pub mod keyboard;
 
@@ -11,13 +11,12 @@ pub trait PS2Device {
     fn periodic(&mut self);
 }
 
-pub struct PS2Device1Task;
+pub fn ps2_device_1_task() -> ! {
+    x86_64::instructions::interrupts::enable();
 
-impl Task for PS2Device1Task {
-    fn run(&mut self) {
-        let mut device = super::PS1_DEVICE.acquire();
-        let device = device.as_mut().unwrap();
+    loop {
+        super::PS1_DEVICE.with_mut_ref(|device| device.as_mut().unwrap().periodic());
 
-        device.periodic();
+        schedule();
     }
 }
