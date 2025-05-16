@@ -13,6 +13,8 @@
 #![feature(ptr_metadata)]
 #![feature(variant_count)]
 #![feature(iter_collect_into)]
+#![feature(never_type)]
+#![feature(sync_unsafe_cell)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -37,6 +39,8 @@
     clippy::todo,
     clippy::explicit_deref_methods,
     clippy::missing_panics_doc,
+    clippy::fn_to_numeric_cast,
+    clippy::unnecessary_box_returns,
 )]
 
 use bootloader_api::BootInfo;

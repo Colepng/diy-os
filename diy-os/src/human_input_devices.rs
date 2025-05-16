@@ -1,13 +1,14 @@
 use alloc::vec::Vec;
 use core::mem::{Assume, TransmuteFrom};
 
-use crate::{multitasking::Task, spinlock::Spinlock, timer::TIME_KEEPER};
+use crate::{multitasking::schedule, spinlock::Spinlock, timer::{Miliseconds, Time, TIME_KEEPER}};
 
 pub(crate) static KEYMAP: Spinlock<Keymap> = Spinlock::new(Keymap::new());
 
 pub static STDIN: Spinlock<Vec<Keycode>> = Spinlock::new(Vec::new());
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum Keycode {
     A = 0x0,
     B,
@@ -260,17 +261,24 @@ impl From<Keycode> for char {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum PressedState {
+    Pressed,
+    Released,
+    Held,
+}
+
 #[derive(Copy, Clone)]
 pub struct KeyState {
-    pressed: bool,
-    duration: u16,
+    pressed: PressedState,
+    duration: Time,
 }
 
 impl KeyState {
     pub const fn new() -> Self {
         Self {
-            pressed: false,
-            duration: 0,
+            pressed: PressedState::Released,
+            duration: Time::new(),
         }
     }
 }
@@ -288,13 +296,13 @@ impl Keymap {
 
     pub fn press_key(&mut self, code: Keycode) {
         let state = &mut self.keys[usize::from(code)];
-        state.pressed = true;
+        state.pressed = PressedState::Pressed;
     }
 
     pub fn release_key(&mut self, code: Keycode) {
         let state = &mut self.keys[usize::from(code)];
-        state.pressed = false;
-        state.duration = 0;
+        state.pressed = PressedState::Released;
+        state.duration.reset();
     }
 
     pub fn get_key_state(&self, code: Keycode) -> KeyState {
@@ -303,7 +311,7 @@ impl Keymap {
 
     pub fn get_pressed_keys(&self) -> impl Iterator<Item = Keycode> {
         self.keys.iter().enumerate().filter_map(|(index, state)| {
-            if state.pressed {
+            if matches!(state.pressed, PressedState::Pressed | PressedState::Held) {
                 // SAFETY:
                 //      - Num has to be a valid variant since there is only variant count number of
                 //      elements
@@ -319,7 +327,7 @@ impl Keymap {
             .iter_mut()
             .enumerate()
             .filter_map(|(index, state)| {
-                if state.pressed {
+                if matches!(state.pressed, PressedState::Pressed | PressedState::Held) {
                     // SAFETY:
                     //      - Num has to be a valid variant since there is only variant count number of
                     //      elements
@@ -331,12 +339,13 @@ impl Keymap {
     }
 }
 
-pub struct ProccesKeys;
+pub fn process_keys() -> ! {
+    x86_64::instructions::interrupts::enable();
+    // use crate::println;
 
-impl Task for ProccesKeys {
-    fn run(&mut self) {
+    loop {
         let duration = TIME_KEEPER.with_mut_ref(|keeper| {
-            let dur = keeper.keyboard_counter.time.miliseconds;
+            let dur = keeper.keyboard_counter.time;
             keeper.keyboard_counter.time.reset();
             dur
         });
@@ -348,23 +357,29 @@ impl Task for ProccesKeys {
                 .keys
                 .iter_mut()
                 .enumerate()
-                .filter(|(_, state)| state.pressed)
+                .filter(|(_, state)| matches!(state.pressed, PressedState::Pressed | PressedState::Held))
                 .for_each(|(index, state)| {
-                    if state.duration == 0 {
+                    if state.duration == Time::ZERO && state.pressed == PressedState::Pressed {
+                        // println!("{}", state.duration);
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
-                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
-                    } else if state.duration >= 600 {
+                        state.duration += duration;
+                        state.pressed = PressedState::Held;
+                    } else if state.duration >= Time::from(Miliseconds(600)) && state.pressed == PressedState::Held {
+                        // crate::println!("{}", state.duration);
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
+                        state.duration = Time::from(Miliseconds(50));
                     } else {
-                        state.duration += u16::try_from(duration.0).expect("duration should never be above 600, which is within the max value of a u16");
+                        state.duration += duration;
                     }
                 });
         });
+
+        schedule();
     }
 }

@@ -5,6 +5,7 @@
 #![feature(never_type)]
 #![feature(pointer_is_aligned_to)]
 #![feature(iter_collect_into)]
+#![feature(sync_unsafe_cell)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -15,6 +16,7 @@
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
+#![allow(clippy::inline_always)]
 
 extern crate alloc;
 
@@ -24,24 +26,26 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-
-use core::{panic::PanicInfo, task};
+use diy_os::{human_input_devices::process_keys, log::trace, multitasking::{schedule, CURRENT_TASK}, ps2::devices::ps2_device_1_task};
 use diy_os::{
-    elf,
     filesystem::ustar,
     hlt_loop,
-    human_input_devices::{ProccesKeys, STDIN},
+    human_input_devices::STDIN,
     kernel_early,
     log::{self, LogLevel},
-    multitasking::{TaskRunner, rewrite::Task},
+    multitasking::Task,
     println,
     ps2::{
-        GenericPS2Controller,
-        controller::PS2Controller,
-        devices::{PS2Device1Task, keyboard::Keyboard},
+        controller::PS2Controller, devices::keyboard::Keyboard, GenericPS2Controller
     },
     timer::sleep,
 };
+use x86_64::VirtAddr;
+use x86_64::structures::paging::FrameAllocator;
+use x86_64::structures::paging::Mapper;
+use x86_64::structures::paging::Page;
+use x86_64::structures::paging::Size4KiB;
+use core::panic::PanicInfo;
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
@@ -71,8 +75,6 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     println!("Hello, world!");
 
-    let elf_file = &ramdisk.get_files()[0];
-
     let gernaric = GenericPS2Controller::new();
 
     let gernaric = gernaric.initialize();
@@ -84,34 +86,45 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
             .replace(Box::new(Keyboard::new()));
     }
 
-    let _ = load_elf_and_jump_into_it(elf_file, &mut mapper, &mut frame_allocator);
-
-    // mapper.level_4_table_mut();
-    //
-    hlt_loop();
-    // let mut task_runner = TaskRunner::new();
-    //
-    // task_runner.add_task(PS2Device1Task);
-    // task_runner.add_task(ProccesKeys);
-    // task_runner.add_task(KernelShell::new());
-    //
-    // task_runner.start_running();
+    setup_tasks(&mut mapper, &mut frame_allocator);
 }
 
-struct KernelShell {
-    input: String,
-}
+fn setup_tasks(
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> ! {
+    let current_stack = rsp();
+    let current_task = Box::leak(Task::allocate_task(
+        0,
+        Page::<Size4KiB>::containing_address(VirtAddr::new(current_stack)).start_address() + 0x1000,
+        VirtAddr::new(current_stack),
+    ));
 
-impl KernelShell {
-    pub const fn new() -> Self {
-        Self {
-            input: String::new(),
-        }
+    current_task.next = core::ptr::from_mut(current_task);
+
+    unsafe {
+        CURRENT_TASK.get().write(Option::Some(current_task));
+    }
+
+    // # SAFETY: ps2_device_1_task calles schedule once per loop
+    unsafe { Task::new(ps2_device_1_task, mapper, frame_allocator).unwrap() };
+    // # SAFETY: process_keys calles schedule once per loop
+    unsafe { Task::new(process_keys, mapper, frame_allocator).unwrap() };
+    // # SAFETY: kernal_shell calles schedule once per loop
+    unsafe { Task::new(kernal_shell, mapper, frame_allocator).unwrap() };
+
+    x86_64::instructions::interrupts::enable();
+
+    loop {
+        schedule();
     }
 }
 
-impl diy_os::multitasking::Task for KernelShell {
-    fn run(&mut self) {
+fn kernal_shell() -> ! {
+    x86_64::instructions::interrupts::enable();
+    let mut input = String::new();
+
+    loop {
         STDIN.with_mut_ref(|stdin| {
             stdin
                 .drain(..stdin.len())
@@ -120,12 +133,12 @@ impl diy_os::multitasking::Task for KernelShell {
                     diy_os::print!("{char}");
                     char
                 })
-                .collect_into(&mut self.input);
-        });
+            .collect_into(&mut input);
+            });
 
-        if self.input.contains('\n') {
-            let lines = self.input.lines();
-
+        if input.contains('\n') {
+            let lines = input.lines();
+        
             for line in lines {
                 let mut words = line.split_whitespace();
                 if let Some(first_word) = words.next() {
@@ -133,212 +146,45 @@ impl diy_os::multitasking::Task for KernelShell {
                         "SLEEP" => {
                             if let Some(word) = words.next() {
                                 let result = word.parse();
-
+        
                                 if let Ok(amount) = result {
-                                    log::trace(alloc::format!("sleeping for {amount}").leak());
+                                    trace(alloc::format!("sleeping for {amount}").leak());
                                     sleep(amount);
-                                    log::trace(alloc::format!("done sleeping for {amount}").leak());
+                                    trace(alloc::format!("done sleeping for {amount}").leak());
                                     println!("done sleeping");
                                 } else {
                                     println!("pls input a number");
                                 }
                             }
-
+        
                         }
                         "PANIC" => {
                             panic!("yo fuck you no more os");
                         }
                         "LOGS" => {
                             let log_level = words.next().map_or(LogLevel::Debug, |level| match level {
-                                    "ERROR" => LogLevel::Error,
-                                    "WARN" => LogLevel::Warn,
-                                    "INFO" => LogLevel::Info,
-                                    "DEBUG" => LogLevel::Debug,
-                                    "TRACE" => LogLevel::Trace,
-                                    _ => {
-                                        println!("Invalid log level, defauting to debug");
-                                        LogLevel::Debug
-                                    },
-                                });
-
+                                "ERROR" => LogLevel::Error,
+                                "WARN" => LogLevel::Warn,
+                                "INFO" => LogLevel::Info,
+                                "DEBUG" => LogLevel::Debug,
+                                "TRACE" => LogLevel::Trace,
+                                _ => {
+                                    println!("Invalid log level, defauting to debug");
+                                    LogLevel::Debug
+                                },
+                            });
+        
                             log::LOGGER.with_ref(|logger| logger.get_events().filter(|event| event.level <= log_level).for_each(|event| println!("{}", event)));
                         }
                         command => println!("{command} is invalid"),
                     }
                 }
             }
-
-            self.input.clear();
+        
+            input.clear();
         }
-    }
-}
 
-#[repr(u8)]
-enum ExitCode {
-    Successful = 0,
-}
-
-fn load_elf_and_jump_into_it(
-    file: &ustar::File,
-    mapper: &mut impl Mapper<Size4KiB>,
-    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> Result<ExitCode, u8> {
-    let file_ptr = file.get_raw_bytes().unwrap().as_ptr();
-    let elf_header = unsafe { &*file_ptr.cast::<elf::Header>() };
-
-    // println!("header, {:#?}", elf_header);
-
-    let program_header = unsafe {
-        &*file_ptr
-            .byte_offset(elf_header.program_header_table_offset as isize)
-            .cast::<elf::ProgramHeaderTableEntry>()
-    };
-
-    // println!("program_header: {:#?}", program_header);
-
-    let ph_virtaddr = program_header.virtual_address;
-
-    println!(
-        "check alignment {}",
-        program_header.virtual_address.as_u64() % program_header.alignment
-    );
-
-    let page_for_load: Page<Size4KiB> = Page::containing_address(ph_virtaddr);
-
-    // Has to be writable to write the load segment to the page in the first place
-    let flags = PageTableFlags::USER_ACCESSIBLE
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::PRESENT
-        | PageTableFlags::NO_CACHE; //| PageTableFlags::
-    //
-    let frame = frame_allocator.allocate_frame().unwrap();
-
-    // Setup page for load
-    unsafe {
-        mapper
-            .map_to_with_table_flags(page_for_load, frame, flags, flags, frame_allocator)
-            .unwrap()
-            .flush();
-    }
-
-    unsafe {
-        // Zeros mem for instructions
-        ph_virtaddr
-            .as_mut_ptr::<u8>()
-            .write_bytes(0, program_header.size_of_segment_mem as usize);
-
-        file_ptr
-            .add(elf_header.program_header_table_offset)
-            .add(elf_header.program_header_entry_size as usize)
-            .copy_to_nonoverlapping(
-                ph_virtaddr.as_mut_ptr::<u8>(),
-                program_header.size_of_segment_file as usize,
-            );
-    }
-
-    // Setup page for stack
-    let page_stack: Page<Size4KiB> = Page::containing_address(ph_virtaddr + 0x2000);
-    let stack_flags = PageTableFlags::USER_ACCESSIBLE
-        | PageTableFlags::WRITABLE
-        | PageTableFlags::PRESENT
-        | PageTableFlags::NO_CACHE;
-    let stack_frame = frame_allocator.allocate_frame().unwrap();
-
-    // map page for stack
-    unsafe {
-        mapper
-            .map_to_with_table_flags(
-                page_stack,
-                stack_frame,
-                stack_flags,
-                stack_flags,
-                frame_allocator,
-            )
-            .unwrap()
-            .flush();
-    }
-
-    let new_stack = page_stack.start_address().as_u64() + 0x1000;
-
-    println!("task: {:X}", task as u64);
-    println!("stack: {:X}", new_stack);
-    // println!("stack2: {:X}", rsp());
-
-    let current_stack = rsp();
-    let mut current_task = Task::allocate_task(0, current_stack);
-
-    let new_stack_ptr = (new_stack) as *mut u64;
-
-    let mut new_task = Task::allocate_task(0, new_stack - 8 * 2);
-
-    current_task.next = new_task.as_ref() as *const Task;
-    new_task.next = current_task.as_ref() as *const Task;
-
-    unsafe {
-        *new_stack_ptr.offset(-1) = task as u64; // rip
-        *new_stack_ptr.offset(-2) = new_task.as_ref() as *const Task as u64; // rax
-    }
-
-    loop {
-        x86_64::instructions::interrupts::disable();
-        unsafe { switch_to_task(current_task.as_ref(), new_task.as_ref()) };
-        x86_64::instructions::interrupts::enable();
-    }
-
-    diy_os::usermode::into_usermode(
-        program_header.virtual_address.as_u64(),
-        page_stack.start_address().as_u64() + 0x1000,
-    );
-
-    Ok(ExitCode::Successful)
-}
-
-pub fn task() {
-    // let current_task: &Task;
-    // let next_task: &Task;
-    //
-    // unsafe {
-    //     let current_task_ptr: *const Task;
-    //     let next_task_ptr: *const Task;
-    //     core::arch::asm!(
-    //         "mov {ctask}, rdi",
-    //         "mov {ntask}, rsi",
-    //         ctask = out(reg) current_task_ptr,
-    //         ntask = out(reg) next_task_ptr,
-    //         );
-    //
-    //     current_task = &*current_task_ptr;
-    //     next_task = &*next_task_ptr;
-    // }
-    //
-    // println!("current_task: 0x{:X}", current_task.stack);
-    // println!("next_task: 0x{:X}", next_task.stack);
-    //
-    // loop {}
-
-    x86_64::instructions::interrupts::enable();
-    loop {
-        x86_64::instructions::interrupts::disable();
-        unsafe {
-            core::mem::transmute::<u64, fn()>(switch_to_task as u64)();
-        }
-        x86_64::instructions::interrupts::enable();
-    }
-}
-
-// arg1: rdi
-// arg2: rsi
-#[naked]
-pub unsafe extern "sysv64" fn switch_to_task(current_task: &Task, next_task: &Task) {
-    unsafe {
-        core::arch::naked_asm!(
-            "push rdi",
-            "mov [rdi+8], rsp", // store rsp in task struct
-            "mov rsi, [rdi+16]",
-            "mov rsp, [rsi+8]",
-            "pop rdi",
-            "ret",
-        );
+        schedule();
     }
 }
 
@@ -348,7 +194,7 @@ fn rsp() -> u64 {
 
     unsafe { core::arch::asm!("mov {stack}, rsp", stack = out(reg) rsp) }
 
-    return rsp;
+    rsp
 }
 
 /// This function is called on panic.
@@ -356,5 +202,6 @@ fn rsp() -> u64 {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
+    log::LOGGER.with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
     hlt_loop();
 }

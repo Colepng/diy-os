@@ -24,7 +24,7 @@ lazy_static! {
 
 const STACK_SIZE: usize = 4096 * 5;
 // has to be mut otherwise doesn't get maded in or smth
-// TODO: fucking fix this dumbass 
+// TODO: fucking fix this dumbass
 // just allocate some pages
 static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
