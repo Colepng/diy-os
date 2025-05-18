@@ -102,7 +102,10 @@ pub struct ScanCode {
 
 impl From<ScanCode> for Keycode {
     fn from(value: ScanCode) -> Self {
-        assert!(value.set == ScanCodeSet::Set2, "only scan set 2 is Implemented");
+        assert!(
+            value.set == ScanCodeSet::Set2,
+            "only scan set 2 is Implemented"
+        );
 
         match value.scan_code {
             0x01 => Self::F9,

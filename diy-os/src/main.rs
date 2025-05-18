@@ -156,25 +156,30 @@ fn kernal_shell() -> ! {
                                     println!("pls input a number");
                                 }
                             }
-        
                         }
                         "PANIC" => {
                             panic!("yo fuck you no more os");
                         }
                         "LOGS" => {
-                            let log_level = words.next().map_or(LogLevel::Debug, |level| match level {
-                                "ERROR" => LogLevel::Error,
-                                "WARN" => LogLevel::Warn,
-                                "INFO" => LogLevel::Info,
+                            let log_level =
+                                words.next().map_or(LogLevel::Debug, |level| match level {
+                                    "ERROR" => LogLevel::Error,
+                                    "WARN" => LogLevel::Warn,
+                                    "INFO" => LogLevel::Info,
                                 "DEBUG" => LogLevel::Debug,
                                 "TRACE" => LogLevel::Trace,
-                                _ => {
-                                    println!("Invalid log level, defauting to debug");
-                                    LogLevel::Debug
-                                },
+                                    _ => {
+                                        println!("Invalid log level, defauting to debug");
+                                        LogLevel::Debug
+                                    }
+                                });
+
+                            log::LOGGER.with_ref(|logger| {
+                                logger
+                                    .get_events()
+                                    .filter(|event| event.level <= log_level)
+                                    .for_each(|event| println!("{}", event))
                             });
-        
-                            log::LOGGER.with_ref(|logger| logger.get_events().filter(|event| event.level <= log_level).for_each(|event| println!("{}", event)));
                         }
                         command => println!("{command} is invalid"),
                     }
