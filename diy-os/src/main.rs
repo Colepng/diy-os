@@ -28,9 +28,24 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::ustar, framebuffer::FRAME_BUFER, hlt_loop, human_input_devices::{process_keys, STDIN}, kernel_early, log::{self, trace, LogLevel}, multitasking::{schedule, Task, SCHEDULER}, println, ps2::{controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE}, timer::{sleep, TIME_KEEPER}
+    filesystem::ustar,
+    hlt_loop,
+    human_input_devices::{STDIN, process_keys},
+    kernel_early,
+    log::{self, LogLevel, trace},
+    multitasking::{SCHEDULER, Task, schedule},
+    println,
+    ps2::{
+        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
+        controller::PS2Controller,
+        devices::{keyboard::Keyboard, ps2_device_1_task},
+    },
+    timer::{TIME_KEEPER, sleep},
 };
-use x86_64::{structures::paging::{FrameAllocator, Mapper, Page, Size4KiB}, VirtAddr};
+use x86_64::{
+    VirtAddr,
+    structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
+};
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
@@ -64,12 +79,8 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     let gernaric = gernaric.initialize();
 
-    {
-        diy_os::ps2::CONTROLLER.acquire().replace(gernaric);
-        diy_os::ps2::PS1_DEVICE
-            .acquire()
-            .replace(Box::new(Keyboard::new()));
-    }
+    CONTROLLER.with_mut_ref(|controller| controller.replace(gernaric));
+    PS1_DEVICE.with_mut_ref(|ps1| ps1.replace(Box::new(Keyboard::new())));
 
     setup_tasks(&mut mapper, &mut frame_allocator);
 }
@@ -91,11 +102,37 @@ fn setup_tasks(
     });
 
     // # SAFETY: ps2_device_1_task calles schedule once per loop
-    unsafe { Task::new(String::from("PS/2 Deivce 1 Task"), ps2_device_1_task, mapper, frame_allocator).unwrap() };
+    unsafe {
+        Task::new(
+            String::from("PS/2 Deivce 1 Task"),
+            ps2_device_1_task,
+            mapper,
+            frame_allocator,
+        )
+        .unwrap();
+    };
+
     // # SAFETY: process_keys calles schedule once per loop
-    unsafe { Task::new(String::from("Proccess keys"), process_keys, mapper, frame_allocator).unwrap() };
+    unsafe {
+        Task::new(
+            String::from("Proccess keys"),
+            process_keys,
+            mapper,
+            frame_allocator,
+        )
+        .unwrap();
+    };
+
     // # SAFETY: kernal_shell calles schedule once per loop
-    unsafe { Task::new(String::from("Kernal Shell"), kernal_shell, mapper, frame_allocator).unwrap() };
+    unsafe {
+        Task::new(
+            String::from("Kernal Shell"),
+            kernal_shell,
+            mapper,
+            frame_allocator,
+        )
+        .unwrap();
+    };
 
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
 
@@ -161,7 +198,7 @@ fn kernal_shell() -> ! {
                                 logger
                                     .get_events()
                                     .filter(|event| event.level <= log_level)
-                                    .for_each(|event| println!("{}", event))
+                                    .for_each(|event| println!("{}", event));
                             });
                         }
                         command => println!("{command} is invalid"),
