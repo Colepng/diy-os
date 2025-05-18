@@ -228,5 +228,13 @@ fn rsp() -> u64 {
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
     log::LOGGER.with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
+
+    if let Some(scheduler) = SCHEDULER.try_acquire() {
+        let task = scheduler.get_current_task();
+        println!("{:#?}", task);
+    } else {
+        println!("scheduler was locked");
+    }
+
     hlt_loop();
 }
