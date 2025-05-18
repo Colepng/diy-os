@@ -123,11 +123,11 @@ impl From<Microseconds> for Nanoseconds {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Time {
+pub struct Duration {
     nanoseconds: Nanoseconds,
 }
 
-impl<T: Into<Nanoseconds>> From<T> for Time {
+impl<T: Into<Nanoseconds>> From<T> for Duration {
     fn from(value: T) -> Self {
         Self {
             nanoseconds: value.into(),
@@ -135,7 +135,7 @@ impl<T: Into<Nanoseconds>> From<T> for Time {
     }
 }
 
-impl<T: Into<Nanoseconds>> core::ops::Add<T> for Time {
+impl<T: Into<Nanoseconds>> core::ops::Add<T> for Duration {
     type Output = Self;
 
     fn add(self, rhs: T) -> Self::Output {
@@ -145,13 +145,13 @@ impl<T: Into<Nanoseconds>> core::ops::Add<T> for Time {
     }
 }
 
-impl core::ops::AddAssign for Time {
+impl core::ops::AddAssign for Duration {
     fn add_assign(&mut self, rhs: Self) {
         self.nanoseconds = self.nanoseconds + rhs.nanoseconds;
     }
 }
 
-impl core::fmt::Display for Time {
+impl core::fmt::Display for Duration {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let seconds: Seconds = self.nanoseconds.into();
         let milis: Miliseconds = (self.nanoseconds - seconds).into();
@@ -166,7 +166,7 @@ impl core::fmt::Display for Time {
     }
 }
 
-impl Time {
+impl Duration {
     pub const ZERO: Self = Self::new();
 
     pub const fn new() -> Self {
@@ -181,13 +181,13 @@ impl Time {
 }
 
 pub struct Counter {
-    pub time: Time,
+    pub time: Duration,
 }
 
 impl Counter {
     pub const fn new() -> Self {
         Self {
-            time: Time::new(),
+            time: Duration::new(),
         }
     }
 }
@@ -233,7 +233,7 @@ pub fn sleep(count: u64) {
     }
 }
 
-pub fn time<F, R>(f: F) -> (R, Time)
+pub fn time<F, R>(f: F) -> (R, Duration)
 where
     F: FnOnce() -> R,
 {

@@ -3,7 +3,7 @@ use core::fmt::Display;
 use alloc::vec::Vec;
 
 use crate::spinlock::Spinlock;
-use crate::timer::{TIME_KEEPER, Time};
+use crate::timer::{Duration, TIME_KEEPER};
 
 pub static LOGGER: Spinlock<Logger> = Spinlock::new(Logger::new());
 
@@ -83,7 +83,7 @@ impl Logger {
 
 pub struct Event {
     text: &'static str,
-    time: Time,
+    time: Duration,
     pub level: LogLevel,
 }
 

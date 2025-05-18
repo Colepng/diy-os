@@ -1,7 +1,11 @@
 use alloc::vec::Vec;
 use core::mem::{Assume, TransmuteFrom};
 
-use crate::{multitasking::schedule, spinlock::Spinlock, timer::{Miliseconds, Time, TIME_KEEPER}};
+use crate::{
+    multitasking::schedule,
+    spinlock::Spinlock,
+    timer::{Duration, Miliseconds, TIME_KEEPER},
+};
 
 pub(crate) static KEYMAP: Spinlock<Keymap> = Spinlock::new(Keymap::new());
 
@@ -271,14 +275,14 @@ pub enum PressedState {
 #[derive(Copy, Clone)]
 pub struct KeyState {
     pressed: PressedState,
-    duration: Time,
+    duration: Duration,
 }
 
 impl KeyState {
     pub const fn new() -> Self {
         Self {
             pressed: PressedState::Released,
-            duration: Time::new(),
+            duration: Duration::new(),
         }
     }
 }
@@ -357,9 +361,11 @@ pub fn process_keys() -> ! {
                 .keys
                 .iter_mut()
                 .enumerate()
-                .filter(|(_, state)| matches!(state.pressed, PressedState::Pressed | PressedState::Held))
+                .filter(|(_, state)| {
+                    matches!(state.pressed, PressedState::Pressed | PressedState::Held)
+                })
                 .for_each(|(index, state)| {
-                    if state.duration == Time::ZERO && state.pressed == PressedState::Pressed {
+                    if state.duration == Duration::ZERO && state.pressed == PressedState::Pressed {
                         // println!("{}", state.duration);
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
@@ -367,13 +373,15 @@ pub fn process_keys() -> ! {
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
                         state.duration += duration;
                         state.pressed = PressedState::Held;
-                    } else if state.duration >= Time::from(Miliseconds(600)) && state.pressed == PressedState::Held {
+                    } else if state.duration >= Duration::from(Miliseconds(600))
+                        && state.pressed == PressedState::Held
+                    {
                         // crate::println!("{}", state.duration);
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
                         buffer.push(unsafe { Keycode::from_usize_unchecked(index) });
-                        state.duration = Time::from(Miliseconds(50));
+                        state.duration = Duration::from(Miliseconds(50));
                     } else {
                         state.duration += duration;
                     }
