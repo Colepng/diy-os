@@ -37,6 +37,18 @@ impl<T: ?Sized> Spinlock<T> {
         SpinlockGuard { spinlock: self }
     }
 
+    pub fn try_acquire(&self) -> Option<SpinlockGuard<'_, T>> {
+        self.disable_interrupts();
+
+        if self.locked
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire).is_ok() {
+                Option::Some(SpinlockGuard { spinlock: self })
+        } else {
+            self.enable_interrupts();
+            Option::None
+        }
+    }
+
     fn enable_interrupts(&self) {
         #[cfg(not(test))]
         unsafe {
