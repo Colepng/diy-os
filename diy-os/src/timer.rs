@@ -122,7 +122,7 @@ impl From<Microseconds> for Nanoseconds {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Duration {
     nanoseconds: Nanoseconds,
 }

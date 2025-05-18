@@ -26,7 +26,7 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-use diy_os::{human_input_devices::process_keys, log::trace, multitasking::{schedule, CURRENT_TASK}, ps2::devices::ps2_device_1_task};
+use core::panic::PanicInfo;
 use diy_os::{
     filesystem::ustar,
     hlt_loop,
@@ -35,17 +35,20 @@ use diy_os::{
     log::{self, LogLevel},
     multitasking::Task,
     println,
-    ps2::{
-        controller::PS2Controller, devices::keyboard::Keyboard, GenericPS2Controller
-    },
-    timer::sleep,
+    ps2::{controller::PS2Controller, devices::keyboard::Keyboard, GenericPS2Controller},
+    timer::{sleep, TIME_KEEPER},
+};
+use diy_os::{
+    human_input_devices::process_keys,
+    log::trace,
+    multitasking::{CURRENT_TASK, schedule},
+    ps2::devices::ps2_device_1_task,
 };
 use x86_64::VirtAddr;
 use x86_64::structures::paging::FrameAllocator;
 use x86_64::structures::paging::Mapper;
 use x86_64::structures::paging::Page;
 use x86_64::structures::paging::Size4KiB;
-use core::panic::PanicInfo;
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
@@ -95,6 +98,7 @@ fn setup_tasks(
 ) -> ! {
     let current_stack = rsp();
     let current_task = Box::leak(Task::allocate_task(
+        String::from("Main Task"),
         0,
         Page::<Size4KiB>::containing_address(VirtAddr::new(current_stack)).start_address() + 0x1000,
         VirtAddr::new(current_stack),
@@ -102,18 +106,20 @@ fn setup_tasks(
 
     current_task.next = core::ptr::from_mut(current_task);
 
-    unsafe {
-        CURRENT_TASK.get().write(Option::Some(current_task));
-    }
+    CURRENT_TASK.with_mut_ref(|task| {
+        task.replace(current_task);
+    });
 
     // # SAFETY: ps2_device_1_task calles schedule once per loop
-    unsafe { Task::new(ps2_device_1_task, mapper, frame_allocator).unwrap() };
+    unsafe { Task::new(String::from("PS/2 Deivce 1 Task"), ps2_device_1_task, mapper, frame_allocator).unwrap() };
     // # SAFETY: process_keys calles schedule once per loop
-    unsafe { Task::new(process_keys, mapper, frame_allocator).unwrap() };
+    unsafe { Task::new(String::from("Proccess keys"), process_keys, mapper, frame_allocator).unwrap() };
     // # SAFETY: kernal_shell calles schedule once per loop
-    unsafe { Task::new(kernal_shell, mapper, frame_allocator).unwrap() };
+    unsafe { Task::new(String::from("Kernal Shell"), kernal_shell, mapper, frame_allocator).unwrap() };
 
     x86_64::instructions::interrupts::enable();
+
+    TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
 
     loop {
         schedule();
@@ -133,12 +139,12 @@ fn kernal_shell() -> ! {
                     diy_os::print!("{char}");
                     char
                 })
-            .collect_into(&mut input);
-            });
+                .collect_into(&mut input);
+        });
 
         if input.contains('\n') {
             let lines = input.lines();
-        
+
             for line in lines {
                 let mut words = line.split_whitespace();
                 if let Some(first_word) = words.next() {
@@ -146,7 +152,7 @@ fn kernal_shell() -> ! {
                         "SLEEP" => {
                             if let Some(word) = words.next() {
                                 let result = word.parse();
-        
+
                                 if let Ok(amount) = result {
                                     trace(alloc::format!("sleeping for {amount}").leak());
                                     sleep(amount);
@@ -166,8 +172,8 @@ fn kernal_shell() -> ! {
                                     "ERROR" => LogLevel::Error,
                                     "WARN" => LogLevel::Warn,
                                     "INFO" => LogLevel::Info,
-                                "DEBUG" => LogLevel::Debug,
-                                "TRACE" => LogLevel::Trace,
+                                    "DEBUG" => LogLevel::Debug,
+                                    "TRACE" => LogLevel::Trace,
                                     _ => {
                                         println!("Invalid log level, defauting to debug");
                                         LogLevel::Debug
@@ -185,7 +191,7 @@ fn kernal_shell() -> ! {
                     }
                 }
             }
-        
+
             input.clear();
         }
 
