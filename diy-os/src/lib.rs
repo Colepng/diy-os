@@ -15,6 +15,7 @@
 #![feature(iter_collect_into)]
 #![feature(never_type)]
 #![feature(sync_unsafe_cell)]
+#![feature(box_as_ptr)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -40,7 +41,8 @@
     clippy::explicit_deref_methods,
     clippy::missing_panics_doc,
     clippy::fn_to_numeric_cast,
-    clippy::unnecessary_box_returns
+    clippy::unnecessary_box_returns,
+    clippy::linkedlist
 )]
 
 use bootloader_api::BootInfo;

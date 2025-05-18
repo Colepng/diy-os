@@ -28,27 +28,9 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::ustar,
-    hlt_loop,
-    human_input_devices::STDIN,
-    kernel_early,
-    log::{self, LogLevel},
-    multitasking::Task,
-    println,
-    ps2::{controller::PS2Controller, devices::keyboard::Keyboard, GenericPS2Controller},
-    timer::{sleep, TIME_KEEPER},
+    filesystem::ustar, framebuffer::FRAME_BUFER, hlt_loop, human_input_devices::{process_keys, STDIN}, kernel_early, log::{self, trace, LogLevel}, multitasking::{schedule, Task, SCHEDULER}, println, ps2::{controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE}, timer::{sleep, TIME_KEEPER}
 };
-use diy_os::{
-    human_input_devices::process_keys,
-    log::trace,
-    multitasking::{CURRENT_TASK, schedule},
-    ps2::devices::ps2_device_1_task,
-};
-use x86_64::VirtAddr;
-use x86_64::structures::paging::FrameAllocator;
-use x86_64::structures::paging::Mapper;
-use x86_64::structures::paging::Page;
-use x86_64::structures::paging::Size4KiB;
+use x86_64::{structures::paging::{FrameAllocator, Mapper, Page, Size4KiB}, VirtAddr};
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
@@ -97,17 +79,15 @@ fn setup_tasks(
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
 ) -> ! {
     let current_stack = rsp();
-    let current_task = Box::leak(Task::allocate_task(
+    let current_task = Task::allocate_task(
         String::from("Main Task"),
         0,
         Page::<Size4KiB>::containing_address(VirtAddr::new(current_stack)).start_address() + 0x1000,
         VirtAddr::new(current_stack),
-    ));
+    );
 
-    current_task.next = core::ptr::from_mut(current_task);
-
-    CURRENT_TASK.with_mut_ref(|task| {
-        task.replace(current_task);
+    SCHEDULER.with_mut_ref(|scheduler| {
+        scheduler.set_first_task(current_task);
     });
 
     // # SAFETY: ps2_device_1_task calles schedule once per loop
