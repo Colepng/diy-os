@@ -88,22 +88,21 @@ impl<T: Into<Self>> core::ops::Sub<T> for Nanoseconds {
 
 impl From<Nanoseconds> for Seconds {
     fn from(value: Nanoseconds) -> Self {
-        Self(value.0/1_000_000_000)
+        Self(value.0 / 1_000_000_000)
     }
 }
 
 impl From<Nanoseconds> for Miliseconds {
     fn from(value: Nanoseconds) -> Self {
-        Self(value.0/1_000_000)
+        Self(value.0 / 1_000_000)
     }
 }
 
 impl From<Nanoseconds> for Microseconds {
     fn from(value: Nanoseconds) -> Self {
-        Self(value.0/1_000)
+        Self(value.0 / 1_000)
     }
 }
-
 
 impl From<Seconds> for Nanoseconds {
     fn from(value: Seconds) -> Self {
@@ -130,7 +129,9 @@ pub struct Time {
 
 impl<T: Into<Nanoseconds>> From<T> for Time {
     fn from(value: T) -> Self {
-        Self { nanoseconds: value.into() }
+        Self {
+            nanoseconds: value.into(),
+        }
     }
 }
 
@@ -138,7 +139,9 @@ impl<T: Into<Nanoseconds>> core::ops::Add<T> for Time {
     type Output = Self;
 
     fn add(self, rhs: T) -> Self::Output {
-        Self { nanoseconds: self.nanoseconds + rhs }
+        Self {
+            nanoseconds: self.nanoseconds + rhs,
+        }
     }
 }
 
@@ -151,18 +154,24 @@ impl core::ops::AddAssign for Time {
 impl core::fmt::Display for Time {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let seconds: Seconds = self.nanoseconds.into();
-        let milis: Miliseconds = (self.nanoseconds - seconds).into(); 
+        let milis: Miliseconds = (self.nanoseconds - seconds).into();
         let micros: Microseconds = (self.nanoseconds - seconds - milis).into();
-        f.write_fmt(format_args!("{}:{}:{}:{}", seconds.0, milis.0, micros.0, (self.nanoseconds - seconds - milis - micros).0))
+        f.write_fmt(format_args!(
+            "{}:{}:{}:{}",
+            seconds.0,
+            milis.0,
+            micros.0,
+            (self.nanoseconds - seconds - milis - micros).0
+        ))
     }
 }
 
 impl Time {
     pub const ZERO: Self = Self::new();
-    
+
     pub const fn new() -> Self {
         Self {
-            nanoseconds: Nanoseconds(0)
+            nanoseconds: Nanoseconds(0),
         }
     }
 

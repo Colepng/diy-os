@@ -15,10 +15,13 @@ lazy_static! {
         let _user_code = gdt.append(Descriptor::user_code_segment());
         let _user_data = gdt.append(Descriptor::user_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
-        (gdt, Selectors {
-            code_selector,
-            tss_selector,
-        })
+        (
+            gdt,
+            Selectors {
+                code_selector,
+                tss_selector,
+            },
+        )
     };
 }
 

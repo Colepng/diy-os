@@ -1,7 +1,7 @@
-use core::marker::Send;
-use core::marker::Copy;
-use core::marker::Sized;
 use core::assert;
+use core::marker::Copy;
+use core::marker::Send;
+use core::marker::Sized;
 use core::{marker::PhantomData, ptr::NonNull};
 
 pub trait Access {}

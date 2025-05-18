@@ -40,7 +40,7 @@
     clippy::explicit_deref_methods,
     clippy::missing_panics_doc,
     clippy::fn_to_numeric_cast,
-    clippy::unnecessary_box_returns,
+    clippy::unnecessary_box_returns
 )]
 
 use bootloader_api::BootInfo;
@@ -61,6 +61,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod human_input_devices;
 pub mod interrupts;
+pub mod log;
 pub mod memory;
 pub mod multitasking;
 pub mod pit;
@@ -71,7 +72,6 @@ pub mod syscalls;
 pub mod timer;
 pub mod usermode;
 pub mod volatile;
-pub mod log;
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
