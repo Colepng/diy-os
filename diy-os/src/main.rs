@@ -117,8 +117,6 @@ fn setup_tasks(
     // # SAFETY: kernal_shell calles schedule once per loop
     unsafe { Task::new(String::from("Kernal Shell"), kernal_shell, mapper, frame_allocator).unwrap() };
 
-    x86_64::instructions::interrupts::enable();
-
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
 
     loop {
@@ -127,7 +125,6 @@ fn setup_tasks(
 }
 
 fn kernal_shell() -> ! {
-    x86_64::instructions::interrupts::enable();
     let mut input = String::new();
 
     loop {

@@ -344,9 +344,6 @@ impl Keymap {
 }
 
 pub fn process_keys() -> ! {
-    x86_64::instructions::interrupts::enable();
-    // use crate::println;
-
     loop {
         let duration = TIME_KEEPER.with_mut_ref(|keeper| {
             let dur = keeper.keyboard_counter.time;
@@ -376,7 +373,6 @@ pub fn process_keys() -> ! {
                     } else if state.duration >= Duration::from(Miliseconds(600))
                         && state.pressed == PressedState::Held
                     {
-                        // crate::println!("{}", state.duration);
                         // SAFETY:
                         //      - Num has to be a valid variant since there is only variant count number of
                         //      elements
