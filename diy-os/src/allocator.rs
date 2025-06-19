@@ -5,7 +5,7 @@ use x86_64::{
     },
 };
 
-use crate::spinlock::{Spinlock, SpinlockGuard};
+use spinlock::{Spinlock, SpinlockGuard};
 
 use self::fixed_size_block::FixedSizeBlockAllocator;
 

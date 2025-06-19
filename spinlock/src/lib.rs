@@ -1,3 +1,6 @@
+#![cfg_attr(not(test), no_std)]
+#![feature(negative_impls)]
+
 use core::{
     cell::UnsafeCell,
     fmt,

@@ -3,7 +3,6 @@ use crate::{
         font::SIZE,
         graphics::{GraphicBackend, Pixels, TextDrawer},
     },
-    spinlock::Spinlock,
     volatile::VolatileMutRef,
 };
 use core::{
@@ -11,6 +10,8 @@ use core::{
     mem::{Assume, TransmuteFrom},
     slice,
 };
+
+use spinlock::Spinlock;
 
 use bootloader_api::info::{FrameBufferInfo, PixelFormat};
 

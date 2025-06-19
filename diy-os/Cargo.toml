@@ -20,6 +20,7 @@ noto-sans-mono-bitmap = "0.3.0"
 thiserror = { version = "2.0", default-features = false }
 anyhow = { version = "1.0.94", default-features = false }
 diy-os-macros = { path="../diy-os-macros/" }
+spinlock = { version = "0.1.0", path = "../spinlock" }
 
 # [build-dependencies]
 # cc = "1.0.0"

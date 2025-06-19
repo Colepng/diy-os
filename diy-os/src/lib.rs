@@ -69,7 +69,6 @@ pub mod multitasking;
 pub mod pit;
 pub mod ps2;
 pub mod serial;
-pub mod spinlock;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;

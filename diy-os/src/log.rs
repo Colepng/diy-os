@@ -2,8 +2,8 @@ use core::fmt::Display;
 
 use alloc::vec::Vec;
 
-use crate::spinlock::Spinlock;
 use crate::timer::{Duration, TIME_KEEPER};
+use spinlock::Spinlock;
 
 pub static LOGGER: Spinlock<Logger> = Spinlock::new(Logger::new());
 

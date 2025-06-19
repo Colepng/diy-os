@@ -3,9 +3,10 @@ use core::mem::{Assume, TransmuteFrom};
 
 use crate::{
     multitasking::schedule,
-    spinlock::Spinlock,
     timer::{Duration, Miliseconds, TIME_KEEPER},
 };
+
+use spinlock::Spinlock;
 
 pub(crate) static KEYMAP: Spinlock<Keymap> = Spinlock::new(Keymap::new());
 

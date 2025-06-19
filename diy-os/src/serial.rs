@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use uart_16550::SerialPort;
 
-use crate::spinlock::Spinlock;
+use spinlock::Spinlock;
 
 lazy_static! {
     pub static ref SERIAL1: Spinlock<SerialPort> = {

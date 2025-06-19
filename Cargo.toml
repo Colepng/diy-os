@@ -5,7 +5,7 @@ edition = "2024"
 default-run = "os"
 
 [workspace]
-members = ["diy-os", "diy-os-macros"]
+members = ["diy-os", "diy-os-macros", "spinlock"]
 
 [dependencies]
 ovmf-prebuilt = "0.1.0-alpha.1"

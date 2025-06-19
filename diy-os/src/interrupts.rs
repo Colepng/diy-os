@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
+use spinlock::Spinlock;
 use x86_64::{
     VirtAddr, set_general_handler,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
@@ -15,8 +16,8 @@ use crate::{
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
-pub static PICS: crate::spinlock::Spinlock<ChainedPics> =
-    crate::spinlock::Spinlock::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+pub static PICS: Spinlock<ChainedPics> =
+    Spinlock::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {

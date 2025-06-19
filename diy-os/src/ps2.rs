@@ -1,8 +1,8 @@
-use crate::spinlock::Spinlock;
 use alloc::boxed::Box;
 use controller::Inital;
 pub use controller::controllers::generic::GenericPS2Controller;
 use devices::PS2Device;
+use spinlock::Spinlock;
 
 pub mod controller;
 pub mod devices;

@@ -1,5 +1,5 @@
-use crate::spinlock::Spinlock;
 use crate::{errors::validity::InputOutOfRangeInclusive, pit};
+use spinlock::Spinlock;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemTimerError {
