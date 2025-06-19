@@ -19,6 +19,8 @@ thiserror = { version = "2.0", default-features = false }
 anyhow = { version = "1.0.94", default-features = false }
 diy-os-macros = { path="../diy-os-macros/" }
 spinlock = { version = "0.1.0", path = "../spinlock" }
+log = "0.4.27"
+kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 
 [[bin]]
 name = "diy-os"

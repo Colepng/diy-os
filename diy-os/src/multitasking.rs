@@ -1,4 +1,4 @@
-use crate::log::info;
+use log::info;
 use crate::timer::{Duration, TIME_KEEPER};
 use alloc::boxed::Box;
 use alloc::collections::linked_list::LinkedList;
@@ -88,7 +88,7 @@ impl Task {
 
         let stack_page = unsafe { allocate_stack(addr, mapper, frame_alloc) };
 
-        info("allocated new stack");
+        info!("allocated new stack");
 
         let new_task = unsafe { Self::crate_new_task(common_name, task_fn, stack_page) };
 

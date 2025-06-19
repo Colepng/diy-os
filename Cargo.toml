@@ -1,5 +1,5 @@
 [workspace]
-members = ["diy-os", "diy-os-macros", "runners", "spinlock"]
+members = ["diy-os", "diy-os-macros", "kernel_logger", "runners", "spinlock"]
 resolver = "3"
 
 [profile.dev]

@@ -26,21 +26,19 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
+use log::{trace, Level};
 use core::panic::PanicInfo;
 use diy_os::{
     filesystem::ustar,
     hlt_loop,
-    human_input_devices::{STDIN, process_keys},
+    human_input_devices::{process_keys, STDIN},
     kernel_early,
-    log::{self, LogLevel, trace},
-    multitasking::{SCHEDULER, Task, schedule},
+    multitasking::{schedule, Task, SCHEDULER},
     println,
     ps2::{
-        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
-        controller::PS2Controller,
-        devices::{keyboard::Keyboard, ps2_device_1_task},
+        controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE
     },
-    timer::{TIME_KEEPER, sleep},
+    timer::{sleep, TIME_KEEPER},
 };
 use x86_64::{
     VirtAddr,
@@ -168,9 +166,9 @@ fn kernal_shell() -> ! {
                                 let result = word.parse();
 
                                 if let Ok(amount) = result {
-                                    trace(alloc::format!("sleeping for {amount}").leak());
+                                    trace!("sleeping for {amount}");
                                     sleep(amount);
-                                    trace(alloc::format!("done sleeping for {amount}").leak());
+                                    trace!("done sleeping for {amount}");
                                     println!("done sleeping");
                                 } else {
                                     println!("pls input a number");
@@ -182,19 +180,19 @@ fn kernal_shell() -> ! {
                         }
                         "LOGS" => {
                             let log_level =
-                                words.next().map_or(LogLevel::Debug, |level| match level {
-                                    "ERROR" => LogLevel::Error,
-                                    "WARN" => LogLevel::Warn,
-                                    "INFO" => LogLevel::Info,
-                                    "DEBUG" => LogLevel::Debug,
-                                    "TRACE" => LogLevel::Trace,
+                                words.next().map_or(Level::Debug, |level| match level {
+                                    "ERROR" => Level::Error,
+                                    "WARN" => Level::Warn,
+                                    "INFO" => Level::Info,
+                                    "DEBUG" => Level::Debug,
+                                    "TRACE" => Level::Trace,
                                     _ => {
                                         println!("Invalid log level, defauting to debug");
-                                        LogLevel::Debug
+                                        Level::Debug
                                     }
                                 });
 
-                            log::LOGGER.with_ref(|logger| {
+                            diy_os::logger::LOGGER.with_ref(|logger| {
                                 logger
                                     .get_events()
                                     .filter(|event| event.level <= log_level)
@@ -227,7 +225,7 @@ fn rsp() -> u64 {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    log::LOGGER.with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
+    diy_os::logger::LOGGER.with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
 
     if let Some(scheduler) = SCHEDULER.try_acquire() {
         let task = scheduler.get_current_task();

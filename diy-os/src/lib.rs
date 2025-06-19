@@ -46,6 +46,7 @@
 )]
 
 use bootloader_api::BootInfo;
+use log::info;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
@@ -63,7 +64,7 @@ pub mod framebuffer;
 pub mod gdt;
 pub mod human_input_devices;
 pub mod interrupts;
-pub mod log;
+pub mod logger;
 pub mod memory;
 pub mod multitasking;
 pub mod pit;
@@ -80,6 +81,8 @@ pub enum InitError {
     FailedToSetupHeap(MapToError<Size4KiB>),
     #[error("Failed to setup system timer")]
     FailedToSetupSystemTimer(#[from] SystemTimerError),
+    #[error("Failed to setup the kernel logger")]
+    FailedToSetupLogger,
 }
 
 /// frequency is in hz
@@ -111,29 +114,31 @@ pub fn kernel_early(
     allocator::setup_heap(&mut mapper, &mut frame_allocator)
         .map_err(InitError::FailedToSetupHeap)?;
 
-    log::info("Heap setup, can start logging");
+    kernel_logger::init(logger::store).or(Err(InitError::FailedToSetupLogger))?;
+
+    info!("Heap setup, can start logging");
 
     if let Some(framebuffer) = boot_info.framebuffer.take() {
         framebuffer::init(framebuffer);
-        log::info("Initialized framebuffer");
+        info!("Initialized framebuffer");
     }
 
     gdt::init();
-    log::info("The GDT was initialized");
+    info!("The GDT was initialized");
 
     interrupts::init_idt();
-    log::info("The IDT was initialized");
+    info!("The IDT was initialized");
 
     unsafe { interrupts::PICS.acquire().initialize() };
-    log::info("The PIC was initialized");
+    info!("The PIC was initialized");
     interrupts::unmask();
-    log::info("Unmasked interrupts");
+    info!("Unmasked interrupts");
 
     x86_64::instructions::interrupts::enable();
-    log::info("Interrupts Enabled");
+    info!("Interrupts Enabled");
 
     timer::setup_system_timer(frequency)?;
-    log::info("System timer Initialized");
+    info!("System timer Initialized");
 
     Ok((boot_info, frame_allocator, mapper))
 }
