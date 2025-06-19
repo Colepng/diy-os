@@ -26,20 +26,22 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-use log::{trace, Level};
 use core::panic::PanicInfo;
 use diy_os::{
     filesystem::ustar,
     hlt_loop,
-    human_input_devices::{process_keys, STDIN},
+    human_input_devices::{STDIN, process_keys},
     kernel_early,
-    multitasking::{schedule, Task, SCHEDULER},
+    multitasking::{SCHEDULER, Task, schedule},
     println,
     ps2::{
-        controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE
+        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
+        controller::PS2Controller,
+        devices::{keyboard::Keyboard, ps2_device_1_task},
     },
-    timer::{sleep, TIME_KEEPER},
+    timer::{TIME_KEEPER, sleep},
 };
+use log::{Level, trace};
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
@@ -225,7 +227,8 @@ fn rsp() -> u64 {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    diy_os::logger::LOGGER.with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
+    diy_os::logger::LOGGER
+        .with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
 
     if let Some(scheduler) = SCHEDULER.try_acquire() {
         let task = scheduler.get_current_task();

@@ -5,13 +5,13 @@
     clippy::nursery,
     clippy::perf,
     clippy::style,
-    clippy::todo,
+    clippy::todo
 )]
 #![deny(
     clippy::suspicious,
     clippy::correctness,
     clippy::complexity,
-    clippy::missing_const_for_fn,
+    clippy::missing_const_for_fn
 )]
 
 use core::{

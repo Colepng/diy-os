@@ -1,8 +1,8 @@
-use log::info;
 use crate::timer::{Duration, TIME_KEEPER};
 use alloc::boxed::Box;
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
+use log::info;
 use spinlock::Spinlock;
 use x86_64::VirtAddr;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};

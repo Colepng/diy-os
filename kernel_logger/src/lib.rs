@@ -4,7 +4,7 @@
     clippy::nursery,
     clippy::perf,
     clippy::style,
-    clippy::todo,
+    clippy::todo
 )]
 #![deny(
     clippy::suspicious,
@@ -40,9 +40,7 @@ pub struct Logger {
 
 impl Logger {
     pub const fn new(store: fn(&'static str, Level)) -> Self {
-        Self {
-            store
-        }
+        Self { store }
     }
 }
 
@@ -53,10 +51,14 @@ impl log::Log for Logger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            let string = record.args().as_str().or_else(|| {
-                let string = record.args().to_string();
-                Some(string.leak())
-            }).unwrap();
+            let string = record
+                .args()
+                .as_str()
+                .or_else(|| {
+                    let string = record.args().to_string();
+                    Some(string.leak())
+                })
+                .unwrap();
             (self.store)(string, record.level());
         }
     }
