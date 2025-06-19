@@ -12,9 +12,6 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
     - name: Install Nightly
@@ -24,14 +21,15 @@ jobs:
           rustup override set nightly
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
-    - name: Build Binary
+    - name: Lint diy-os
       working-directory: ./diy-os
       run: cargo clippy -- -D warnings
+    - name: Lint spinlock
+      working-directory: ./spinlock
+      run: cargo clippy -- -D warnings
+
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
     - name: Install Nightly
@@ -41,14 +39,15 @@ jobs:
           rustup override set nightly
     - name: Install x86_64-unknown-none
       run: rustup target add x86_64-unknown-none
-    - name: Build Binary
+    - name: Build diy-os
       working-directory: ./diy-os
       run: cargo build --verbose
+    - name: Build spinlock
+      working-directory: ./spinlock
+      run: cargo build --verbose
+
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
     - name: Install x86_64-unknown-none
@@ -58,13 +57,15 @@ jobs:
       run: |
           rustup toolchain install nightly --component rust-src
           rustup override set nightly
-    - name: Run tests
+    - name: Run diy-os tests
+      working-directory: ./diy-os
       run: cargo test --lib --target=x86_64-unknown-linux-gnu
+    - name: Run spinlock tests
+      working-directory: ./spinlock
+      run: cargo test
+
   miri:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./diy-os
     steps:
     - uses: actions/checkout@v4
     - name: Install x86_64-unknown-none
@@ -75,5 +76,9 @@ jobs:
           rustup toolchain install nightly --component miri --component rust-src
           rustup override set nightly
           cargo miri setup
-    - name: Run Miri
+    - name: Run miri on diy-os
+      working-directory: ./diy-os
+      run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
+    - name: Run miri on spinlock
+      working-directory: ./diy-os
       run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
