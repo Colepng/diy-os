@@ -1,26 +1,6 @@
-[package]
-name = "os"
-version = "0.1.0"
-edition = "2024"
-default-run = "os"
-
 [workspace]
-members = ["diy-os", "diy-os-macros", "spinlock"]
-
-[dependencies]
-ovmf-prebuilt = "0.1.0-alpha.1"
-
-[build-dependencies]
-diy-os = { path = "diy-os", artifact = "bin", target = "x86_64-unknown-none" }
-bootloader = "0.11.10"
-
-[[bin]]
-name = "qemu-bios"
-path = "src/qemu-bios.rs"
-
-[[bin]]
-name = "qemu-uefi"
-path = "src/qemu-uefi.rs"
+members = ["diy-os", "diy-os-macros", "runners", "spinlock"]
+resolver = "3"
 
 [profile.dev]
 panic = "abort"

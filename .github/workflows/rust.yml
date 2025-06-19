@@ -20,13 +20,13 @@ jobs:
           rustup toolchain install nightly --component rust-src  --component clippy
           rustup override set nightly
     - name: Install x86_64-unknown-none
+      working-directory: .
       run: rustup target add x86_64-unknown-none
-    - name: Lint diy-os
-      working-directory: ./diy-os
-      run: cargo clippy -- -D warnings
-    - name: Lint spinlock
-      working-directory: ./spinlock
-      run: cargo clippy -- -D warnings
+    - name: Lint workspace
+      working-directory: .
+      # exclude is used to prevent bootloader create being built
+      # which fails in ci
+      run: cargo clippy --workspace --exclude runners -- -D warnings
 
   build:
     runs-on: ubuntu-latest
@@ -38,20 +38,18 @@ jobs:
           rustup toolchain install nightly --component rust-src
           rustup override set nightly
     - name: Install x86_64-unknown-none
+      working-directory: .
       run: rustup target add x86_64-unknown-none
-    - name: Build diy-os
-      working-directory: ./diy-os
-      run: cargo build --verbose
-    - name: Build spinlock
-      working-directory: ./spinlock
-      run: cargo build --verbose
+    - name: Build workspace
+      working-directory: .
+      # exclude is used to prevent bootloader create being built
+      # which fails in ci
+      run: cargo build --workspace --exclude runners --verbose
 
   test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install x86_64-unknown-none
-      run: rustup target add x86_64-unknown-none
     - name: Install Nightly
       working-directory: .
       run: |
@@ -60,16 +58,14 @@ jobs:
     - name: Run diy-os tests
       working-directory: ./diy-os
       run: cargo test --lib --target=x86_64-unknown-linux-gnu
-    - name: Run spinlock tests
-      working-directory: ./spinlock
-      run: cargo test
+    - name: Run workspace tests
+      working-directory: .
+      run: cargo test --target=x86_64-unknown-linux-gnu
 
   miri:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install x86_64-unknown-none
-      run: rustup target add x86_64-unknown-none
     - name: Install Miri
       working-directory: .
       run: |
@@ -79,6 +75,6 @@ jobs:
     - name: Run miri on diy-os
       working-directory: ./diy-os
       run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
-    - name: Run miri on spinlock
-      working-directory: ./diy-os
-      run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
+    - name: Run miri on workspace
+      working-directory: .
+      run: cargo miri test

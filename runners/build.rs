@@ -2,6 +2,8 @@ use bootloader::DiskImageBuilder;
 use std::{env, path::PathBuf};
 
 fn main() {
+    std::env::set_current_dir("../").unwrap();
+
     // set by cargo for the kernel artifact dependency
     let kernel_path = env::var("CARGO_BIN_FILE_DIY_OS").unwrap();
     let mut disk_builder = DiskImageBuilder::new(PathBuf::from(kernel_path));

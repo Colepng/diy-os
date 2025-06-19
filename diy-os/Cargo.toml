@@ -24,3 +24,7 @@ spinlock = { version = "0.1.0", path = "../spinlock" }
 name = "diy-os"
 test = false
 bench = false
+
+[lib]
+test = false
+bench = false
