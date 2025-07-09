@@ -21,6 +21,7 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+#[derive(Debug)]
 pub struct Spinlock<T: ?Sized> {
     locked: AtomicBool,
     #[cfg(not(test))]
