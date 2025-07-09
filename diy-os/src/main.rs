@@ -70,8 +70,11 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, 1000)?;
 
-    let ramdisk_addr = boot_info.ramdisk_addr.into_option().unwrap();
-    let _ramdisk = unsafe { ustar::Ustar::new(ramdisk_addr.try_into()?) };
+    let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
+        Some(unsafe { ustar::Ustar::new(addr.try_into()?) })
+    } else {
+        None
+    };
 
     println!("Hello, world!");
 
