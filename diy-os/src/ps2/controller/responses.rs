@@ -1,5 +1,4 @@
 use crate::ps2::controller::Value;
-use core::ops::Not;
 
 use super::{Response, SystemFlag};
 
@@ -8,7 +7,7 @@ use super::{Response, SystemFlag};
 pub struct ConfigurationByte(pub u8);
 
 impl ConfigurationByte {
-    pub fn get_config(&self) -> Config {
+    pub const fn get_config(&self) -> Config {
         Config {
             first_port_interrupt: self.get_first_port_interrupt(),
             second_port_interrupt: self.get_second_port_interrupt(),
@@ -33,26 +32,26 @@ impl ConfigurationByte {
         }
     }
 
-    pub fn get_first_port_interrupt(&self) -> EnabledOrDisabled {
+    pub const fn get_first_port_interrupt(&self) -> EnabledOrDisabled {
         // 1111_1111 & 0000_0001 = 0000_0001
         EnabledOrDisabled::from(self.get_bit(0))
     }
 
-    pub fn set_first_port_interrupt(&mut self, value: EnabledOrDisabled) {
+    pub const fn set_first_port_interrupt(&mut self, value: EnabledOrDisabled) {
         // 1111_1110 | 0000_0001 = 1111_1111
         // 1111_1111 & 1111_1110 = 1111_1110
         self.set_bit(0, value.into());
     }
 
-    pub fn get_second_port_interrupt(&self) -> EnabledOrDisabled {
+    pub const fn get_second_port_interrupt(&self) -> EnabledOrDisabled {
         EnabledOrDisabled::from(self.get_bit(1))
     }
 
-    pub fn set_second_port_interrupt(&mut self, value: EnabledOrDisabled) {
+    pub const fn set_second_port_interrupt(&mut self, value: EnabledOrDisabled) {
         self.set_bit(1, value.into());
     }
 
-    pub fn get_system_flag(&self) -> SystemFlag {
+    pub const fn get_system_flag(&self) -> SystemFlag {
         SystemFlag::from(self.get_bit(2))
     }
 
@@ -60,27 +59,27 @@ impl ConfigurationByte {
         self.get_bit(3)
     }
 
-    pub fn get_first_port_clock(&self) -> EnabledOrDisabled {
+    pub const fn get_first_port_clock(&self) -> EnabledOrDisabled {
         EnabledOrDisabled::from(!self.get_bit(4))
     }
 
-    pub fn set_first_port_clock(&mut self, value: EnabledOrDisabled) {
-        self.set_bit(4, bool::from(value).not());
+    pub const fn set_first_port_clock(&mut self, value: EnabledOrDisabled) {
+        self.set_bit(4, !bool::from(value));
     }
 
-    pub fn get_second_port_clock(&self) -> EnabledOrDisabled {
+    pub const fn get_second_port_clock(&self) -> EnabledOrDisabled {
         EnabledOrDisabled::from(!self.get_bit(5))
     }
 
-    pub fn set_second_port_clock(&mut self, value: EnabledOrDisabled) {
-        self.set_bit(5, bool::from(value).not());
+    pub const fn set_second_port_clock(&mut self, value: EnabledOrDisabled) {
+        self.set_bit(5, !bool::from(value));
     }
 
-    pub fn get_first_port_translation(&self) -> EnabledOrDisabled {
+    pub const fn get_first_port_translation(&self) -> EnabledOrDisabled {
         EnabledOrDisabled::from(self.get_bit(6))
     }
 
-    pub fn set_first_port_translation(&mut self, value: EnabledOrDisabled) {
+    pub const fn set_first_port_translation(&mut self, value: EnabledOrDisabled) {
         self.set_bit(6, value.into());
     }
 
@@ -171,13 +170,13 @@ pub enum EnabledOrDisabled {
     Enabled = 1,
 }
 
-impl From<bool> for EnabledOrDisabled {
+impl const From<bool> for EnabledOrDisabled {
     fn from(value: bool) -> Self {
         if value { Self::Enabled } else { Self::Disabled }
     }
 }
 
-impl From<EnabledOrDisabled> for bool {
+impl const From<EnabledOrDisabled> for bool {
     fn from(value: EnabledOrDisabled) -> Self {
         match value {
             EnabledOrDisabled::Disabled => false,

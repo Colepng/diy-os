@@ -332,7 +332,7 @@ impl StatusRegister {
 pub struct StatusByte(u8);
 
 impl StatusByte {
-    pub fn get_status(&self) -> Status {
+    pub const fn get_status(&self) -> Status {
         Status {
             output_buffer: self.get_output_buffer_status(),
             input_buffer: self.get_input_buffer_status(),
@@ -345,19 +345,19 @@ impl StatusByte {
         }
     }
 
-    pub fn get_output_buffer_status(&self) -> BufferStatus {
+    pub const fn get_output_buffer_status(&self) -> BufferStatus {
         ((self.0 & (1 << 0)) != 0).into()
     }
 
-    pub fn get_input_buffer_status(&self) -> BufferStatus {
+    pub const fn get_input_buffer_status(&self) -> BufferStatus {
         ((self.0 & (1 << 1)) != 0).into()
     }
 
-    pub fn get_system_flag(&self) -> SystemFlag {
+    pub const fn get_system_flag(&self) -> SystemFlag {
         ((self.0 & (1 << 2)) != 0).into()
     }
 
-    pub fn get_command_or_data(&self) -> CommandOrData {
+    pub const fn get_command_or_data(&self) -> CommandOrData {
         ((self.0 & (1 << 3)) != 0).into()
     }
 
@@ -396,7 +396,7 @@ pub enum BufferStatus {
     Full = 1,
 }
 
-impl From<bool> for BufferStatus {
+impl const From<bool> for BufferStatus {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and BufferStatus
         // since a bool must be a 0 or 1
@@ -411,7 +411,7 @@ pub enum SystemFlag {
     SystemPassedPOST = 1,
 }
 
-impl From<bool> for SystemFlag {
+impl const From<bool> for SystemFlag {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and SystemFlag
         // since a bool must be a 0 or 1
@@ -426,7 +426,7 @@ pub enum CommandOrData {
     Command = 1,
 }
 
-impl From<bool> for CommandOrData {
+impl const From<bool> for CommandOrData {
     fn from(value: bool) -> Self {
         // Safety: Safe to transmute between bool and CommandOrData
         // since a bool must be a 0 or 1

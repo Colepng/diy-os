@@ -64,19 +64,6 @@ pub struct PitFrequency {
     frequency: u32,
 }
 
-impl const Refined for PitFrequency {
-    type Input = u32; 
-
-    fn new(input: Self::Input) -> Self {
-        Self {
-            frequency: input,
-        }
-    }
-
-    fn holds(input: &Self::Input) -> bool {
-        *input >= Self::MIN && *input <= Self::MAX
-    }
-}
 
 impl PitFrequency {
     const MAX: u32 = Pit::FREQUENCY;
@@ -116,17 +103,31 @@ impl PitFrequency {
     }
 }
 
-impl From<PitFrequency> for u32 {
+impl const From<PitFrequency> for u32 {
     fn from(val: PitFrequency) -> Self {
         val.frequency
     }
 }
 
-impl TryFrom<u32> for PitFrequency {
+impl const TryFrom<u32> for PitFrequency {
     type Error = errors::validity::InputOutOfRangeInclusive<u32>;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         Self::try_new(value)
+    }
+}
+
+impl const Refined for PitFrequency {
+    type Input = u32; 
+
+    fn new(input: Self::Input) -> Self {
+        Self {
+            frequency: input,
+        }
+    }
+
+    fn holds(input: &Self::Input) -> bool {
+        *input >= Self::MIN && *input <= Self::MAX
     }
 }
 

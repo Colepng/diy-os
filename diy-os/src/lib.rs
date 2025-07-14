@@ -17,6 +17,7 @@
 #![feature(sync_unsafe_cell)]
 #![feature(box_as_ptr)]
 #![feature(const_trait_impl)]
+#![feature(const_from)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,

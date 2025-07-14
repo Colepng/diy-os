@@ -7,6 +7,7 @@
 #![feature(iter_collect_into)]
 #![feature(sync_unsafe_cell)]
 #![feature(const_trait_impl)]
+#![feature(const_from)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -62,7 +63,7 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
-    let frequency = refine_const!(1000, PitFrequency);
+    let frequency = refine_const!(1000u32, PitFrequency);
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
     let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
