@@ -1,3 +1,4 @@
+use refine::Refined;
 use x86_64::instructions::port::{Port, PortWriteOnly};
 
 use crate::errors;
@@ -61,6 +62,20 @@ impl Default for Pit {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PitFrequency {
     frequency: u32,
+}
+
+impl const Refined for PitFrequency {
+    type Input = u32; 
+
+    fn new(input: Self::Input) -> Self {
+        Self {
+            frequency: input,
+        }
+    }
+
+    fn holds(input: &Self::Input) -> bool {
+        *input >= Self::MIN && *input <= Self::MAX
+    }
 }
 
 impl PitFrequency {

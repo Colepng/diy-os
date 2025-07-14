@@ -1,10 +1,9 @@
-use crate::{errors::validity::InputOutOfRangeInclusive, pit};
 use spinlock::Spinlock;
+
+use crate::pit;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SystemTimerError {
-    #[error("Frequencny is unsupported")]
-    UnsupportedFrequency(#[from] InputOutOfRangeInclusive<u32>),
     #[error("Ownership of system timer could not be accuired")]
     FailedToAccuireOwnsershipOfSystemTimer(),
 }
@@ -14,7 +13,7 @@ pub enum SystemTimerError {
 /// all system timers.
 /// Will return [`SystemTimerError::FailedToAccuireOwnsershipOfSystemTimer`] if all system timers was
 /// already owned.
-pub fn setup_system_timer(frequency: u32) -> Result<(), SystemTimerError> {
+pub fn setup_system_timer(frequency: pit::PitFrequency) -> Result<(), SystemTimerError> {
     let mut pit =
         pit::Pit::take().ok_or_else(SystemTimerError::FailedToAccuireOwnsershipOfSystemTimer)?;
 
@@ -27,8 +26,7 @@ pub fn setup_system_timer(frequency: u32) -> Result<(), SystemTimerError> {
 
     pit.mode_port.write(configure_command);
 
-    let freq = pit::PitFrequency::try_new(frequency)?;
-    let divider = pit::Pit::frequency_divder_from_frequency(freq);
+    let divider = pit::Pit::frequency_divder_from_frequency(frequency);
 
     pit.set_frequency_divder(divider);
 

@@ -16,6 +16,7 @@
 #![feature(never_type)]
 #![feature(sync_unsafe_cell)]
 #![feature(box_as_ptr)]
+#![feature(const_trait_impl)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -93,7 +94,7 @@ pub enum InitError {
 /// Will panic if no physical memory offset could be found
 pub fn kernel_early(
     boot_info: &'static mut BootInfo,
-    frequency: u32,
+    frequency: pit::PitFrequency,
 ) -> Result<
     (
         &'static BootInfo,

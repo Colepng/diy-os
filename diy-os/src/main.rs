@@ -6,6 +6,7 @@
 #![feature(pointer_is_aligned_to)]
 #![feature(iter_collect_into)]
 #![feature(sync_unsafe_cell)]
+#![feature(const_trait_impl)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]
@@ -26,20 +27,13 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
+use refine::refine_const;
+use refine::Refined;
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::ustar,
-    hlt_loop,
-    human_input_devices::{STDIN, process_keys},
-    kernel_early,
-    multitasking::{SCHEDULER, Task, schedule},
-    println,
-    ps2::{
-        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
-        controller::PS2Controller,
-        devices::{keyboard::Keyboard, ps2_device_1_task},
-    },
-    timer::{TIME_KEEPER, sleep},
+    filesystem::ustar, hlt_loop, human_input_devices::{process_keys, STDIN}, kernel_early, multitasking::{schedule, Task, SCHEDULER}, pit::PitFrequency, println, ps2::{
+        controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE
+    }, timer::{sleep, TIME_KEEPER}
 };
 use log::{Level, trace};
 use x86_64::{
@@ -68,7 +62,8 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
-    let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, 1000)?;
+    let frequency = refine_const!(1000, PitFrequency);
+    let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
     let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
         Some(unsafe { ustar::Ustar::new(addr.try_into()?) })

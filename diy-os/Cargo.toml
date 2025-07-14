@@ -21,6 +21,7 @@ diy-os-macros = { path="../diy-os-macros/" }
 spinlock = { version = "0.1.0", path = "../spinlock" }
 log = "0.4.27"
 kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
+refine = { git = "https://github.com/Colepng/Refinement-types" }
 
 [[bin]]
 name = "diy-os"
