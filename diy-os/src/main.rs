@@ -34,7 +34,7 @@ use diy_os::{
     hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
-    multitasking::{SCHEDULER, Task, schedule, sleep},
+    multitasking::{SCHEDULER, Task, sleep},
     pit::PitFrequency,
     println,
     ps2::{
@@ -42,7 +42,7 @@ use diy_os::{
         controller::PS2Controller,
         devices::{keyboard::Keyboard, ps2_device_1_task},
     },
-    timer::{Duration, Seconds, TIME_KEEPER, sleep as blocking_sleep},
+    timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use log::{Level, debug, trace};
 use refine::Refined;
@@ -161,16 +161,16 @@ fn setup_tasks(
     });
 
     loop {
-        schedule();
+        sleep(Seconds(30).into());
+        debug!("Main task is still running properly");
+        println!("Main task is still running properly");
     }
 }
 
 fn to_be_slept() -> ! {
     loop {
         println!("not sleeping");
-        debug!("waking up");
-        sleep(Duration::from(Seconds(1)));
-        schedule();
+        sleep(Duration::from(Seconds(10)));
     }
 }
 
@@ -178,6 +178,7 @@ fn kernal_shell() -> ! {
     let mut input = String::new();
 
     loop {
+        sleep(Duration::from(Miliseconds(10)));
         STDIN.with_mut_ref(|stdin| {
             stdin
                 .drain(..stdin.len())
@@ -202,7 +203,7 @@ fn kernal_shell() -> ! {
 
                                 if let Ok(amount) = result {
                                     trace!("sleeping for {amount}");
-                                    blocking_sleep(amount);
+                                    sleep(Miliseconds(amount).into());
                                     trace!("done sleeping for {amount}");
                                     println!("done sleeping");
                                 } else {

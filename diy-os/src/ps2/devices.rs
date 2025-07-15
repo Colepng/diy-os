@@ -1,6 +1,7 @@
-// use keyboard::Command;
-
-use crate::multitasking::schedule;
+use crate::{
+    multitasking::sleep,
+    timer::{Duration, Miliseconds},
+};
 
 pub mod keyboard;
 
@@ -14,6 +15,6 @@ pub trait PS2Device {
 pub fn ps2_device_1_task() -> ! {
     loop {
         super::PS1_DEVICE.with_mut_ref(|device| device.as_mut().unwrap().periodic());
-        schedule();
+        sleep(Duration::from(Miliseconds(10)));
     }
 }

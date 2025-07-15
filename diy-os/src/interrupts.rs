@@ -11,11 +11,11 @@ use x86_64::{
 
 use crate::{
     gdt,
-    multitasking::SCHEDULER,
+    multitasking::{SCHEDULER, Scheduler, schedule},
     println,
     ps2::controller::{InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
     syscalls,
-    timer::TIME_KEEPER,
+    timer::{TIME_KEEPER, TimeKeeper},
 };
 
 pub const PIC_1_OFFSET: u8 = 32;
@@ -123,13 +123,28 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     let mut counter = TIME_KEEPER.acquire();
     counter.tick();
 
-    if let Some(mut sched) = SCHEDULER.try_acquire() {
+    let should_schedule = SCHEDULER.try_acquire().is_some_and(|mut sched| {
         sched.wake_up_sleeping_tasks(&mut counter);
-    }
+        drop(counter);
+        if sched.time_slice.nanoseconds <= TimeKeeper::TICK_AMOUNT {
+            sched.time_slice = Scheduler::TIME_SLICE_AMOUNT;
+            drop(sched);
+            true
+        } else {
+            sched.time_slice -= TimeKeeper::TICK_AMOUNT;
+            drop(sched);
+            false
+        }
+    });
 
     unsafe {
         PICS.acquire()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+
+    if should_schedule {
+        // SAFETY: No spinlock is held over this point
+        unsafe { schedule() };
     }
 }
 

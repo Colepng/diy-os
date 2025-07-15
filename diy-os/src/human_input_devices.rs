@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::mem::{Assume, TransmuteFrom};
 
 use crate::{
-    multitasking::schedule,
+    multitasking::sleep,
     timer::{Duration, Miliseconds, TIME_KEEPER},
 };
 
@@ -385,6 +385,6 @@ pub fn process_keys() -> ! {
                 });
         });
 
-        schedule();
+        sleep(Miliseconds(10).into());
     }
 }

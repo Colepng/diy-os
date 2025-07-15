@@ -1,4 +1,4 @@
-use crate::timer::{Duration, TIME_KEEPER, TimeKeeper};
+use crate::timer::{Duration, Miliseconds, TIME_KEEPER, TimeKeeper};
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -21,14 +21,18 @@ pub struct Scheduler {
     current_task: Option<Arc<Spinlock<Task>>>,
     ready_tasks: LinkedList<Arc<Spinlock<Task>>>,
     blocked_tasks: LinkedList<Arc<Spinlock<Task>>>,
+    pub time_slice: Duration,
 }
 
 impl Scheduler {
+    pub const TIME_SLICE_AMOUNT: Duration = Miliseconds(10).into();
+
     const fn new() -> Self {
         Self {
             current_task: Option::None,
             ready_tasks: LinkedList::new(),
             blocked_tasks: LinkedList::new(),
+            time_slice: Self::TIME_SLICE_AMOUNT,
         }
     }
 
@@ -118,6 +122,8 @@ impl Scheduler {
             .inspect(|task| task.acquire().print());
         Self::print_tasks(&self.ready_tasks, "ready");
         Self::print_tasks(&self.blocked_tasks, "blocked");
+
+        println!("time_slice: {}", self.time_slice);
     }
 }
 
@@ -313,12 +319,16 @@ fn get_time_elapsed() -> Duration {
     })
 }
 
-pub fn schedule() {
-    x86_64::instructions::interrupts::disable();
+/// Schedule and switches to the next task.
+///
+/// # Safety
+///
+/// SCHEDULER spinlock must not be held when called.
+pub unsafe fn schedule() {
+    without_interrupts(|| {
+        let elapsed = get_time_elapsed();
 
-    let elapsed = get_time_elapsed();
-
-    SCHEDULER.with_mut_ref(|scheduler| {
+        SCHEDULER.with_mut_ref(|scheduler| {
         if !scheduler.ready_tasks.is_empty() {
             let current_task = scheduler.current_task.take().unwrap();
             let next_task = scheduler.ready_tasks.pop_front().unwrap();
@@ -338,12 +348,12 @@ pub fn schedule() {
 
             scheduler.current_task.replace(next_task);
             scheduler.ready_tasks.push_back(current_task);
+                scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
             unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
         }
     });
-
-    x86_64::instructions::interrupts::enable();
+    });
 }
 
 pub fn block_task(reason: BlockedReason) {
@@ -411,12 +421,13 @@ pub fn unblock_task(task: Arc<Spinlock<Task>>) {
         });
 
         // no tasks were running before hand so preempt
-        if scheduler.ready_tasks.is_empty() {
-            scheduler.current_task.replace(next_task);
-            scheduler.ready_tasks.push_back(current_task);
+            if scheduler.ready_tasks.is_empty() {
+                scheduler.current_task.replace(next_task);
+                scheduler.ready_tasks.push_back(current_task);
+                scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
-            unsafe {
-                switch_to_task(current_task_ptr, next_task_ptr);
+                unsafe {
+                    switch_to_task(current_task_ptr, next_task_ptr);
             }
         } else {
             scheduler.current_task.replace(current_task);
