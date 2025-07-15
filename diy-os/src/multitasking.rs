@@ -76,14 +76,11 @@ impl Scheduler {
             .collect();
 
         for task in tasks {
-            crate::println!("true");
             self.ready_task(task);
         }
     }
 
     fn ready_task(&mut self, task: Arc<Spinlock<Task>>) {
-        crate::println!("readying");
-
         without_interrupts(|| {
             task.with_mut_ref(|task| {
                 task.state = State::ReadyToRun;
@@ -223,8 +220,7 @@ impl Task {
     /// Allocates and insets a new task the linked list
     ///
     /// # Safety
-    /// Callers must insure that the stack page is unused and that the function ptr
-    /// calls the [`schedule`] frequently.
+    /// Callers must insure that the stack page is unused
     unsafe fn crate_new_task(
         common_name: String,
         new_task: fn() -> !,
@@ -343,9 +339,90 @@ pub unsafe fn schedule() {
         let elapsed = get_time_elapsed();
 
         SCHEDULER.with_mut_ref(|scheduler| {
-        if !scheduler.ready_tasks.is_empty() {
+            if !scheduler.ready_tasks.is_empty() {
+                let current_task = scheduler.current_task.take().unwrap();
+                let next_task = scheduler.ready_tasks.pop_front().unwrap();
+
+                let current_task_ptr = current_task.with_mut_ref(|task| {
+                    task.time_used += elapsed;
+                    task.state = State::ReadyToRun;
+
+                    core::ptr::from_mut(task)
+                });
+
+                let next_task_ptr = next_task.with_mut_ref(|task| {
+                    task.state = State::Running;
+
+                    core::ptr::from_mut(task)
+                });
+
+                scheduler.current_task.replace(next_task);
+                scheduler.ready_tasks.push_back(current_task);
+                scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
+
+                unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
+            }
+        });
+    });
+}
+
+/// Blocks the current task.
+///
+/// # Safety
+///
+/// Scheduler and time keeper must not be held.
+pub unsafe fn block_task(reason: BlockedReason) {
+    without_interrupts(|| {
+        let elapsed = get_time_elapsed();
+
+        SCHEDULER.with_mut_ref(|scheduler| {
+            if !scheduler.ready_tasks.is_empty() {
+                // TODO: replace with unreachable
+                let current_task = scheduler.current_task.take().unwrap();
+                let next_task = scheduler.ready_tasks.pop_front().unwrap();
+
+                let current_task_ptr = current_task.with_mut_ref(|task| {
+                    task.time_used += elapsed;
+                    task.state = State::Blocked(reason);
+
+                    core::ptr::from_mut(task)
+                });
+
+                let next_task_ptr = next_task.with_mut_ref(|task| {
+                    task.state = State::Running;
+
+                    core::ptr::from_mut(task)
+                });
+
+                scheduler.current_task.replace(next_task);
+                scheduler.blocked_tasks.push_back(current_task);
+                scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
+
+                unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
+            }
+        });
+    });
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum UnblockingError {
+    #[error("Unable to find any blocked tasks with a matching id")]
+    FailedToFindBlockedTask,
+}
+
+/// Unblocks the given tasks.
+///
+/// # Safety
+///
+/// Scheduler and time keeper spin lock must not be held.
+pub unsafe fn unblock_task(task: Arc<Spinlock<Task>>) {
+    without_interrupts(|| {
+        let elapsed = get_time_elapsed();
+
+        SCHEDULER.with_mut_ref(|scheduler| {
+            // TODO: replace with unreachable
             let current_task = scheduler.current_task.take().unwrap();
-            let next_task = scheduler.ready_tasks.pop_front().unwrap();
+            let next_task = task;
 
             let current_task_ptr = current_task.with_mut_ref(|task| {
                 task.time_used += elapsed;
@@ -356,85 +433,12 @@ pub unsafe fn schedule() {
 
             let next_task_ptr = next_task.with_mut_ref(|task| {
                 task.state = State::Running;
+                debug!("unblocking task {}", task.common_name);
 
                 core::ptr::from_mut(task)
             });
 
-            scheduler.current_task.replace(next_task);
-            scheduler.ready_tasks.push_back(current_task);
-                scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
-
-            unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
-        }
-    });
-    });
-}
-
-pub fn block_task(reason: BlockedReason) {
-    crate::println!("blocking");
-    x86_64::instructions::interrupts::disable();
-
-    let elapsed = get_time_elapsed();
-
-    SCHEDULER.with_mut_ref(|scheduler| {
-        if !scheduler.ready_tasks.is_empty() {
-            let current_task = scheduler.current_task.take().unwrap();
-            let next_task = scheduler.ready_tasks.pop_front().unwrap();
-
-            let current_task_ptr = current_task.with_mut_ref(|task| {
-                task.time_used += elapsed;
-                task.state = State::Blocked(reason);
-                debug!("blocking task {}", task.common_name);
-
-                core::ptr::from_mut(task)
-            });
-
-            let next_task_ptr = next_task.with_mut_ref(|task| {
-                task.state = State::Running;
-
-                core::ptr::from_mut(task)
-            });
-
-            scheduler.current_task.replace(next_task);
-            scheduler.blocked_tasks.push_back(current_task);
-
-            unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
-        }
-    });
-
-    x86_64::instructions::interrupts::enable();
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum UnblockingError {
-    #[error("Unable to find any blocked tasks with a matching id")]
-    FailedToFindBlockedTask,
-}
-
-pub fn unblock_task(task: Arc<Spinlock<Task>>) {
-    x86_64::instructions::interrupts::disable();
-
-    let elapsed = get_time_elapsed();
-
-    SCHEDULER.with_mut_ref(|scheduler| {
-        let current_task = scheduler.current_task.take().unwrap();
-        let next_task = task;
-
-        let current_task_ptr = current_task.with_mut_ref(|task| {
-            task.time_used += elapsed;
-            task.state = State::ReadyToRun;
-
-            core::ptr::from_mut(task)
-        });
-
-        let next_task_ptr = next_task.with_mut_ref(|task| {
-            task.state = State::Running;
-            debug!("unblocking task {}", task.common_name);
-
-            core::ptr::from_mut(task)
-        });
-
-        // no tasks were running before hand so preempt
+            // no tasks were running before hand so preempt
             if scheduler.ready_tasks.is_empty() {
                 scheduler.current_task.replace(next_task);
                 scheduler.ready_tasks.push_back(current_task);
@@ -442,13 +446,13 @@ pub fn unblock_task(task: Arc<Spinlock<Task>>) {
 
                 unsafe {
                     switch_to_task(current_task_ptr, next_task_ptr);
+                }
+            } else {
+                scheduler.current_task.replace(current_task);
+                scheduler.ready_tasks.push_back(next_task);
             }
-        } else {
-            scheduler.current_task.replace(current_task);
-            scheduler.ready_tasks.push_back(next_task);
-        }
+        });
     });
-    x86_64::instructions::interrupts::enable();
 }
 
 /// This function will unblock the task wit the associated id.
@@ -456,7 +460,11 @@ pub fn unblock_task(task: Arc<Spinlock<Task>>) {
 /// # Errors
 ///
 /// This function will return an error if no matching task can be found.
-pub fn unblock_task_id(task_id: TaskID) -> Result<(), UnblockingError> {
+///
+/// # Safety
+///
+/// Scheduler and time keeper must not be held.
+pub unsafe fn unblock_task_id(task_id: TaskID) -> Result<(), UnblockingError> {
     let task = SCHEDULER.with_mut_ref(|scheduler| {
         scheduler
             .blocked_tasks
@@ -465,7 +473,11 @@ pub fn unblock_task_id(task_id: TaskID) -> Result<(), UnblockingError> {
             .ok_or(UnblockingError::FailedToFindBlockedTask)
     })?;
 
-    unblock_task(task);
+    assert!(!TIME_KEEPER.is_acquired());
+    assert!(!SCHEDULER.is_acquired());
+
+    // SAFETY: Asserts assure both spinlocks are not locked
+    unsafe { unblock_task(task) };
 
     Ok(())
 }
@@ -474,5 +486,11 @@ pub fn sleep(duration: Duration) {
     let instant = TIME_KEEPER
         .with_ref(|time| time.time_since_boot.time)
         .get_nanoseconds();
-    block_task(BlockedReason::SleepingUntil(duration + instant));
+
+    assert!(!SCHEDULER.is_acquired());
+
+    // SAFETY: Scheduler locked is checked by assert
+    unsafe {
+        block_task(BlockedReason::SleepingUntil(duration + instant));
+    }
 }

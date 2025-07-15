@@ -274,9 +274,10 @@ fn panic(info: &PanicInfo) -> ! {
 
     if let Some(scheduler) = SCHEDULER.try_acquire() {
         let task = scheduler.get_current_task();
-        if let Some(task) = task 
-            && let Some(task) = task.try_acquire() {
-                println!("{:#?}", task);
+        if let Some(task) = task
+            && let Some(task) = task.try_acquire()
+        {
+            println!("{:#?}", task);
         }
     } else {
         println!("scheduler was locked");
