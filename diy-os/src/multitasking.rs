@@ -96,6 +96,29 @@ impl Scheduler {
     pub const fn get_blocked_tasks(&self) -> &LinkedList<Arc<Spinlock<Task>>> {
         &self.blocked_tasks
     }
+
+    fn print_tasks(tasks: &LinkedList<Arc<Spinlock<Task>>>, title: &'static str) {
+        crate::println!("{title} tasks");
+        for task in tasks {
+            if let Some(guard) = task.try_acquire() {
+                guard.print();
+            } else {
+                crate::println!("task was locked");
+            }
+        }
+    }
+
+    pub fn print_state(&self) {
+        use crate::println;
+
+        println!("\nprinting schedule state: \n");
+
+        self.current_task
+            .as_ref()
+            .inspect(|task| task.acquire().print());
+        Self::print_tasks(&self.ready_tasks, "ready");
+        Self::print_tasks(&self.blocked_tasks, "blocked");
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -209,6 +232,13 @@ impl Task {
         }
 
         task
+    }
+
+    fn print(&self) {
+        let name = &self.common_name;
+        let id = &self.id;
+        let state = &self.state;
+        crate::println!("\tname: {name}\n\tid: {id:?}\n\tstate:{state:?}");
     }
 }
 

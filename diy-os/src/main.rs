@@ -22,7 +22,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::linked_list::LinkedList, string::String, sync::Arc};
+use alloc::{boxed::Box, string::String};
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
@@ -47,7 +47,6 @@ use diy_os::{
 use log::{Level, debug, trace};
 use refine::Refined;
 use refine::refine_const;
-use spinlock::Spinlock;
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
@@ -237,11 +236,10 @@ fn kernal_shell() -> ! {
                         }
                         "SCHED" => {
                             SCHEDULER.with_ref(|sched| {
-                                let ready_tasks = sched.get_ready_tasks();
-                                let blocked_tasks = sched.get_blocked_tasks();
-
-                                print_tasks(ready_tasks, "ready");
-                                print_tasks(blocked_tasks, "blocked");
+                                sched.print_state();
+                            });
+                            TIME_KEEPER.with_ref(|time_keeper| {
+                                println!("time_since_boot: {}", time_keeper.time_since_boot.time);
                             });
                         }
                         command => println!("{command} is invalid"),
@@ -252,20 +250,8 @@ fn kernal_shell() -> ! {
             input.clear();
         }
 
-        schedule();
-    }
-}
-
-fn print_tasks(tasks: &LinkedList<Arc<Spinlock<Task>>>, title: &'static str) {
-    for task in tasks {
-        if let Some(guard) = task.try_acquire() {
-            let name = &guard.common_name;
-            let id = &guard.id;
-            let state = &guard.state;
-            println!("tasks {title}: name: {name}\n\tid: {id:?}\n\tstate:{state:?}");
-        } else {
-            println!("task was locked");
-        }
+        // unsafe { schedule() };
+        // diy_os::print!("]");
     }
 }
 
