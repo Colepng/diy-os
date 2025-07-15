@@ -41,6 +41,10 @@ impl<T> Spinlock<T> {
 }
 
 impl<T: ?Sized> Spinlock<T> {
+    pub fn is_acquired(&self) -> bool {
+        self.locked.load(Ordering::Acquire)
+    }
+
     /// Acquires a lock and disables interrupts.
     pub fn acquire(&self) -> SpinlockGuard<'_, T> {
         self.disable_interrupts();
