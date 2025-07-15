@@ -87,7 +87,6 @@ pub enum InitError {
     FailedToSetupLogger,
 }
 
-/// frequency is in hz
 /// # Errors
 /// Will return [`InitError::FailedToSetupHeap`] if it could not map the pages for the heap.
 /// Will also return [`InitError::FailedToSetupSystemTimer`] if the system timer was already owned

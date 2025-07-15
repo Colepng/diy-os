@@ -2,7 +2,11 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spinlock::Spinlock;
 use x86_64::{
-    structures::idt::{HandlerFuncType, HandlerFuncWithErrCode, InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode}, VirtAddr
+    VirtAddr,
+    structures::idt::{
+        HandlerFuncType, HandlerFuncWithErrCode, InterruptDescriptorTable, InterruptStackFrame,
+        PageFaultErrorCode,
+    },
 };
 
 use crate::{
@@ -27,9 +31,9 @@ lazy_static! {
             idt.invalid_opcode
                 .set_handler_fn(invalid_opcode_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-            
+
             let addr = HandlerFuncType::to_virt_addr(double_fault_handler as HandlerFuncWithErrCode);
-            
+
             idt.double_fault
                 .set_handler_addr(addr)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);

@@ -28,15 +28,25 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-use refine::refine_const;
-use refine::Refined;
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::ustar, hlt_loop, human_input_devices::{process_keys, STDIN}, kernel_early, multitasking::{schedule, Task, SCHEDULER}, pit::PitFrequency, println, ps2::{
-        controller::PS2Controller, devices::{keyboard::Keyboard, ps2_device_1_task}, GenericPS2Controller, CONTROLLER, PS1_DEVICE
-    }, timer::{sleep, TIME_KEEPER}
+    filesystem::ustar,
+    hlt_loop,
+    human_input_devices::{STDIN, process_keys},
+    kernel_early,
+    multitasking::{SCHEDULER, Task, schedule},
+    pit::PitFrequency,
+    println,
+    ps2::{
+        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
+        controller::PS2Controller,
+        devices::{keyboard::Keyboard, ps2_device_1_task},
+    },
+    timer::{TIME_KEEPER, sleep},
 };
 use log::{Level, trace};
+use refine::Refined;
+use refine::refine_const;
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},

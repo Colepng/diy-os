@@ -64,7 +64,6 @@ pub struct PitFrequency {
     frequency: u32,
 }
 
-
 impl PitFrequency {
     const MAX: u32 = Pit::FREQUENCY;
     const MIN: u32 = 19;
@@ -118,12 +117,10 @@ impl const TryFrom<u32> for PitFrequency {
 }
 
 impl const Refined for PitFrequency {
-    type Input = u32; 
+    type Input = u32;
 
     fn new(input: Self::Input) -> Self {
-        Self {
-            frequency: input,
-        }
+        Self { frequency: input }
     }
 
     fn holds(input: &Self::Input) -> bool {
