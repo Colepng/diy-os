@@ -84,37 +84,37 @@ impl<T: Into<Self>> core::ops::Sub<T> for Nanoseconds {
     }
 }
 
-impl From<Nanoseconds> for Seconds {
+impl const From<Nanoseconds> for Seconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000_000_000)
     }
 }
 
-impl From<Nanoseconds> for Miliseconds {
+impl const From<Nanoseconds> for Miliseconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000_000)
     }
 }
 
-impl From<Nanoseconds> for Microseconds {
+impl const From<Nanoseconds> for Microseconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000)
     }
 }
 
-impl From<Seconds> for Nanoseconds {
+impl const From<Seconds> for Nanoseconds {
     fn from(value: Seconds) -> Self {
         Self(value.0 * 1_000_000_000)
     }
 }
 
-impl From<Miliseconds> for Nanoseconds {
+impl const From<Miliseconds> for Nanoseconds {
     fn from(value: Miliseconds) -> Self {
         Self(value.0 * 1_000_000)
     }
 }
 
-impl From<Microseconds> for Nanoseconds {
+impl const From<Microseconds> for Nanoseconds {
     fn from(value: Microseconds) -> Self {
         Self(value.0 * 1_000)
     }
@@ -131,7 +131,7 @@ impl Duration {
     }
 }
 
-impl<T: Into<Nanoseconds>> From<T> for Duration {
+impl<T: [const] Into<Nanoseconds>> const From<T> for Duration {
     fn from(value: T) -> Self {
         Self {
             nanoseconds: value.into(),
