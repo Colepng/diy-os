@@ -101,7 +101,6 @@ fn setup_tasks(
     let current_stack = rsp();
     let current_task = Task::allocate_task(
         String::from("Main Task"),
-        0,
         Page::<Size4KiB>::containing_address(VirtAddr::new(current_stack)).start_address() + 0x1000,
         VirtAddr::new(current_stack),
     );

@@ -143,12 +143,22 @@ pub enum State {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct TaskID(pub u64);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
+#[repr(C)]
+pub struct Registers {
+    rbx: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+}
+
+#[derive(Debug)]
 #[repr(C)]
 pub struct Task {
-    pub stack: VirtAddr,
-    pub stack_top: VirtAddr,
-    rax: u64,
+    pub stack: VirtAddr,     // rsp
+    pub stack_top: VirtAddr, //rbp
+    registers: Registers,
     pub cr3: PhysFrame<Size4KiB>,
     pub time_used: Duration,
     pub common_name: String,
@@ -191,16 +201,17 @@ impl Task {
         unsafe { Self::crate_new_task(common_name, task_fn, stack_page) }
     }
 
-    pub fn allocate_task(
-        common_name: String,
-        rax: u64,
-        top_of_stack: VirtAddr,
-        stack: VirtAddr,
-    ) -> Self {
+    pub fn allocate_task(common_name: String, top_of_stack: VirtAddr, stack: VirtAddr) -> Self {
         Self {
             stack,
             stack_top: top_of_stack,
-            rax,
+            registers: Registers {
+                rbx: 0,
+                r12: 0,
+                r13: 0,
+                r14: 0,
+                r15: 0,
+            },
             cr3: Cr3::read().0,
             time_used: Duration::new(),
             common_name,
@@ -222,12 +233,7 @@ impl Task {
         let end_of_stack_addr = stack_page.start_address() + 0x1000;
         let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
 
-        let task = Self::allocate_task(
-            common_name,
-            0,
-            end_of_stack_addr,
-            end_of_stack_addr - (8 * 2),
-        );
+        let task = Self::allocate_task(common_name, end_of_stack_addr, end_of_stack_addr - (8 * 2));
 
         // Setup the new stack
         unsafe {
@@ -292,16 +298,24 @@ pub unsafe fn allocate_stack(
 /// `current_task` must also be the current task
 // arg1: rdi
 // arg2: rsi
+// rbx,  rsp, rbp, r12, r13, r14, r15 need to be saved
 #[unsafe(naked)]
 pub unsafe extern "sysv64" fn switch_to_task(current_task: *mut Task, next_task: *mut Task) {
     core::arch::naked_asm!(
-        "mov [rdi+16], r8", // store rax in task struct
-        "mov [rdi], rsp",   // store rsp in task struct
+        "mov [rdi+48], r15",
+        "mov [rdi+40], r14",
+        "mov [rdi+32], r13",
+        "mov [rdi+24], r12",
+        "mov [rdi+16], rbx",
         "mov [rdi+8], rbp", // store rbp
+        "mov [rdi], rsp",   // store rsp in task struct
         "mov rsp, [rsi]",   // load rsp from the next task
         "mov rbp, [rsi+8]", //load rbp
-        // "mov [{a}+4], rbp",
-        "mov r8, [rsi+16]", // load fax
+        "mov rbx, [rsi+16]",
+        "mov r12, [rsi+24]",
+        "mov r13, [rsi+32]",
+        "mov r14, [rsi+40]",
+        "mov r15, [rsi+48]",
         "ret",
     );
 }
