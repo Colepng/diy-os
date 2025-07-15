@@ -122,7 +122,7 @@ impl const From<Microseconds> for Nanoseconds {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Duration {
-    nanoseconds: Nanoseconds,
+    pub nanoseconds: Nanoseconds,
 }
 
 impl Duration {
@@ -146,6 +146,22 @@ impl<T: Into<Nanoseconds>> core::ops::Add<T> for Duration {
         Self {
             nanoseconds: self.nanoseconds + rhs,
         }
+    }
+}
+
+impl<T: Into<Nanoseconds>> core::ops::Sub<T> for Duration {
+    type Output = Self;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        Self {
+            nanoseconds: self.nanoseconds - rhs,
+        }
+    }
+}
+
+impl<T: Into<Nanoseconds>> core::ops::SubAssign<T> for Duration {
+    fn sub_assign(&mut self, rhs: T) {
+        self.nanoseconds = self.nanoseconds - rhs;
     }
 }
 
@@ -207,9 +223,10 @@ pub struct TimeKeeper {
 }
 
 impl TimeKeeper {
+    pub const TICK_AMOUNT: Nanoseconds = Nanoseconds(1_000_000);
     pub const fn new() -> Self {
         Self {
-            tick_amount: Nanoseconds(1_000_000),
+            tick_amount: Self::TICK_AMOUNT,
             sleep_counter: 0,
             time_since_boot: Counter::new(),
             timer_counter: Counter::new(),
