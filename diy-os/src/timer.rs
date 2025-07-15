@@ -125,6 +125,12 @@ pub struct Duration {
     nanoseconds: Nanoseconds,
 }
 
+impl Duration {
+    pub const fn get_nanoseconds(&self) -> Nanoseconds {
+        self.nanoseconds
+    }
+}
+
 impl<T: Into<Nanoseconds>> From<T> for Duration {
     fn from(value: T) -> Self {
         Self {
@@ -192,6 +198,7 @@ impl Counter {
 
 pub struct TimeKeeper {
     pub tick_amount: Nanoseconds,
+    pub time_since_boot: Counter,
     pub sleep_counter: u64,
     pub timer_counter: Counter,
     pub keyboard_counter: Counter,
@@ -204,6 +211,7 @@ impl TimeKeeper {
         Self {
             tick_amount: Nanoseconds(1_000_000),
             sleep_counter: 0,
+            time_since_boot: Counter::new(),
             timer_counter: Counter::new(),
             keyboard_counter: Counter::new(),
             log_counter: Counter::new(),
@@ -213,6 +221,7 @@ impl TimeKeeper {
 
     pub fn tick(&mut self) {
         self.sleep_counter = self.sleep_counter.saturating_sub(1);
+        self.time_since_boot.time += self.tick_amount.into();
         self.timer_counter.time += self.tick_amount.into();
         self.keyboard_counter.time += self.tick_amount.into();
         self.log_counter.time += self.tick_amount.into();

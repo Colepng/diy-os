@@ -10,7 +10,9 @@ use x86_64::{
 };
 
 use crate::{
-    gdt, println,
+    gdt,
+    multitasking::SCHEDULER,
+    println,
     ps2::controller::{InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
     syscalls,
     timer::TIME_KEEPER,
@@ -120,6 +122,10 @@ extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame,
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     let mut counter = TIME_KEEPER.acquire();
     counter.tick();
+
+    if let Some(mut sched) = SCHEDULER.try_acquire() {
+        sched.wake_up_sleeping_tasks(&mut counter);
+    }
 
     unsafe {
         PICS.acquire()

@@ -18,11 +18,11 @@
     clippy::missing_const_for_fn,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::inline_always)]
+#![allow(clippy::inline_always, clippy::linkedlist)]
 
 extern crate alloc;
 
-use alloc::{boxed::Box, string::String};
+use alloc::{boxed::Box, collections::linked_list::LinkedList, string::String, sync::Arc};
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
@@ -34,7 +34,7 @@ use diy_os::{
     hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
-    multitasking::{SCHEDULER, Task, schedule},
+    multitasking::{SCHEDULER, Task, schedule, sleep},
     pit::PitFrequency,
     println,
     ps2::{
@@ -42,11 +42,12 @@ use diy_os::{
         controller::PS2Controller,
         devices::{keyboard::Keyboard, ps2_device_1_task},
     },
-    timer::{TIME_KEEPER, sleep},
+    timer::{Duration, Seconds, TIME_KEEPER, sleep as blocking_sleep},
 };
-use log::{Level, trace};
+use log::{Level, debug, trace};
 use refine::Refined;
 use refine::refine_const;
+use spinlock::Spinlock;
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
@@ -91,13 +92,13 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     CONTROLLER.with_mut_ref(|controller| controller.replace(gernaric));
     PS1_DEVICE.with_mut_ref(|ps1| ps1.replace(Box::new(Keyboard::new())));
 
-    setup_tasks(&mut mapper, &mut frame_allocator);
+    setup_tasks(&mut mapper, &mut frame_allocator)?;
 }
 
 fn setup_tasks(
     mapper: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> ! {
+) -> anyhow::Result<!> {
     let current_stack = rsp();
     let current_task = Task::allocate_task(
         String::from("Main Task"),
@@ -110,42 +111,66 @@ fn setup_tasks(
         scheduler.set_first_task(current_task);
     });
 
-    // # SAFETY: ps2_device_1_task calles schedule once per loop
-    unsafe {
+    TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
+    // main task starts here
+    // # SAFETY: ps2_device_1_task calls schedule once per loop
+    let ps2_task = unsafe {
         Task::new(
             String::from("PS/2 Deivce 1 Task"),
             ps2_device_1_task,
             mapper,
             frame_allocator,
         )
-        .unwrap();
     };
 
-    // # SAFETY: process_keys calles schedule once per loop
-    unsafe {
+    // # SAFETY: process_keys calls schedule once per loop
+    let keys_task = unsafe {
         Task::new(
             String::from("Proccess keys"),
             process_keys,
             mapper,
             frame_allocator,
         )
-        .unwrap();
     };
 
-    // # SAFETY: kernal_shell calles schedule once per loop
-    unsafe {
+    // # SAFETY: kernal_shell calle schedule once per loop
+    let shell_task = unsafe {
         Task::new(
             String::from("Kernal Shell"),
             kernal_shell,
             mapper,
             frame_allocator,
         )
-        .unwrap();
     };
 
-    TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
+    let blocked_task = unsafe {
+        Task::new(
+            String::from("Blocked Task"),
+            to_be_slept,
+            mapper,
+            frame_allocator,
+        )
+    };
+
+    let (_ps2_task, _keys_task, _shell_task, _blocked_task) = SCHEDULER.with_mut_ref(|scheduler| {
+        let ps2_task = scheduler.spawn_task(ps2_task);
+        let keys_task = scheduler.spawn_task(keys_task);
+        let shell_task = scheduler.spawn_task(shell_task);
+        let blocked_task = scheduler.spawn_task(blocked_task);
+
+        (ps2_task, keys_task, shell_task, blocked_task)
+    });
 
     loop {
+        schedule();
+    }
+}
+
+fn to_be_slept() -> ! {
+    loop {
+        println!("not sleeping");
+        debug!("waking up");
+        sleep(Duration::from(Seconds(1)));
         schedule();
     }
 }
@@ -178,7 +203,7 @@ fn kernal_shell() -> ! {
 
                                 if let Ok(amount) = result {
                                     trace!("sleeping for {amount}");
-                                    sleep(amount);
+                                    blocking_sleep(amount);
                                     trace!("done sleeping for {amount}");
                                     println!("done sleeping");
                                 } else {
@@ -210,6 +235,15 @@ fn kernal_shell() -> ! {
                                     .for_each(|event| println!("{}", event));
                             });
                         }
+                        "SCHED" => {
+                            SCHEDULER.with_ref(|sched| {
+                                let ready_tasks = sched.get_ready_tasks();
+                                let blocked_tasks = sched.get_blocked_tasks();
+
+                                print_tasks(ready_tasks, "ready");
+                                print_tasks(blocked_tasks, "blocked");
+                            });
+                        }
                         command => println!("{command} is invalid"),
                     }
                 }
@@ -219,6 +253,19 @@ fn kernal_shell() -> ! {
         }
 
         schedule();
+    }
+}
+
+fn print_tasks(tasks: &LinkedList<Arc<Spinlock<Task>>>, title: &'static str) {
+    for task in tasks {
+        if let Some(guard) = task.try_acquire() {
+            let name = &guard.common_name;
+            let id = &guard.id;
+            let state = &guard.state;
+            println!("tasks {title}: name: {name}\n\tid: {id:?}\n\tstate:{state:?}");
+        } else {
+            println!("task was locked");
+        }
     }
 }
 
@@ -241,7 +288,10 @@ fn panic(info: &PanicInfo) -> ! {
 
     if let Some(scheduler) = SCHEDULER.try_acquire() {
         let task = scheduler.get_current_task();
-        println!("{:#?}", task);
+        if let Some(task) = task 
+            && let Some(task) = task.try_acquire() {
+                println!("{:#?}", task);
+        }
     } else {
         println!("scheduler was locked");
     }

@@ -1,10 +1,12 @@
-use crate::timer::{Duration, TIME_KEEPER};
-use alloc::boxed::Box;
+use crate::timer::{Duration, TIME_KEEPER, TimeKeeper};
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
-use log::info;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use log::{debug, info};
 use spinlock::Spinlock;
 use x86_64::VirtAddr;
+use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 use x86_64::{registers::control::Cr3, structures::paging::PhysFrame};
 
@@ -16,8 +18,9 @@ const START_ADDR: VirtAddr = VirtAddr::new(0x0000_0000_0804_aff8);
 pub static SCHEDULER: Spinlock<Scheduler> = Spinlock::new(Scheduler::new());
 
 pub struct Scheduler {
-    current_task: Option<Box<Task>>,
-    ready_tasks: LinkedList<Box<Task>>,
+    current_task: Option<Arc<Spinlock<Task>>>,
+    ready_tasks: LinkedList<Arc<Spinlock<Task>>>,
+    blocked_tasks: LinkedList<Arc<Spinlock<Task>>>,
 }
 
 impl Scheduler {
@@ -25,6 +28,7 @@ impl Scheduler {
         Self {
             current_task: Option::None,
             ready_tasks: LinkedList::new(),
+            blocked_tasks: LinkedList::new(),
         }
     }
 
@@ -33,18 +37,84 @@ impl Scheduler {
     /// # Panics
     ///
     /// Panics if the first task was already test.
-    pub fn set_first_task(&mut self, task: Box<Task>) {
+    pub fn set_first_task(&mut self, task: Task) {
         assert!(self.current_task.is_none());
 
-        self.current_task.replace(task);
+        self.current_task.replace(Arc::new(Spinlock::new(task)));
     }
 
-    pub fn get_current_task(&self) -> Option<&Task> {
-        self.current_task.as_deref()
+    pub fn get_current_task(&self) -> Option<Arc<Spinlock<Task>>> {
+        self.current_task.clone()
+    }
+
+    pub fn spawn_task(&mut self, task: Task) -> Arc<Spinlock<Task>> {
+        let task = Arc::new(Spinlock::new(task));
+        self.ready_tasks.push_back(task.clone());
+
+        task
+    }
+
+    /// Wakes up the sleeping tasks that have completed.
+    pub fn wake_up_sleeping_tasks(&mut self, time_keeper: &mut TimeKeeper) {
+        let instant = time_keeper.time_since_boot.time;
+
+        let tasks: Vec<Arc<Spinlock<Task>>> = self
+            .blocked_tasks
+            .extract_if(|task| {
+                task.with_ref(|task| {
+                    if let State::Blocked(BlockedReason::SleepingUntil(until)) = task.state {
+                        until <= instant
+                    } else {
+                        false
+                    }
+                })
+            })
+            .collect();
+
+        for task in tasks {
+            crate::println!("true");
+            self.ready_task(task);
+        }
+    }
+
+    fn ready_task(&mut self, task: Arc<Spinlock<Task>>) {
+        crate::println!("readying");
+
+        without_interrupts(|| {
+            task.with_mut_ref(|task| {
+                task.state = State::ReadyToRun;
+            });
+
+            self.ready_tasks.push_back(task);
+        });
+    }
+
+    pub const fn get_ready_tasks(&self) -> &LinkedList<Arc<Spinlock<Task>>> {
+        &self.ready_tasks
+    }
+
+    pub const fn get_blocked_tasks(&self) -> &LinkedList<Arc<Spinlock<Task>>> {
+        &self.blocked_tasks
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum BlockedReason {
+    Paused,
+    SleepingUntil(Duration),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum State {
+    Running,
+    ReadyToRun,
+    Blocked(BlockedReason),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct TaskID(pub u64);
+
+#[derive(Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Task {
     pub stack: VirtAddr,
@@ -53,6 +123,8 @@ pub struct Task {
     pub cr3: PhysFrame<Size4KiB>,
     pub time_used: Duration,
     pub common_name: String,
+    pub state: State,
+    pub id: TaskID,
 }
 
 unsafe impl Send for Task {}
@@ -69,15 +141,12 @@ impl Task {
     ///
     /// # Safety
     /// callers must ensure the function ptr calls the [`schedule`] frequently.
-    ///
-    /// # Errors
-    /// Will error if the first task is not setup manually
     pub unsafe fn new(
         common_name: String,
         task_fn: fn() -> !,
         mapper: &mut impl Mapper<Size4KiB>,
         frame_alloc: &mut impl FrameAllocator<Size4KiB>,
-    ) -> Result<(), TaskBuildError> {
+    ) -> Self {
         let num_of_stacks = STACK_COUNTER.with_mut_ref(|counter| {
             let temp = *counter;
             *counter += 1;
@@ -90,13 +159,7 @@ impl Task {
 
         info!("allocated new stack");
 
-        let new_task = unsafe { Self::crate_new_task(common_name, task_fn, stack_page) };
-
-        SCHEDULER.with_mut_ref(|scheduler| {
-            scheduler.ready_tasks.push_back(new_task);
-        });
-
-        Ok(())
+        unsafe { Self::crate_new_task(common_name, task_fn, stack_page) }
     }
 
     pub fn allocate_task(
@@ -104,17 +167,17 @@ impl Task {
         rax: u64,
         top_of_stack: VirtAddr,
         stack: VirtAddr,
-    ) -> Box<Self> {
-        let task = Self {
+    ) -> Self {
+        Self {
             stack,
             stack_top: top_of_stack,
             rax,
             cr3: Cr3::read().0,
             time_used: Duration::new(),
             common_name,
-        };
-
-        Box::new(task)
+            state: State::ReadyToRun,
+            id: TaskID(*STACK_COUNTER.acquire()),
+        }
     }
 
     /// Allocates and insets a new task the linked list
@@ -126,7 +189,7 @@ impl Task {
         common_name: String,
         new_task: fn() -> !,
         stack_page: Page<Size4KiB>,
-    ) -> Box<Self> {
+    ) -> Self {
         let end_of_stack_addr = stack_page.start_address() + 0x1000;
         let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
 
@@ -212,22 +275,36 @@ fn first_time_task_cleanup() {
     SCHEDULER.release();
 }
 
-pub fn schedule() {
-    x86_64::instructions::interrupts::disable();
-    let elapsed = TIME_KEEPER.with_mut_ref(|keeper| {
+fn get_time_elapsed() -> Duration {
+    TIME_KEEPER.with_mut_ref(|keeper| {
         let elep = keeper.schedule_counter.time;
         keeper.schedule_counter.time.reset();
         elep
-    });
+    })
+}
+
+pub fn schedule() {
+    x86_64::instructions::interrupts::disable();
+
+    let elapsed = get_time_elapsed();
 
     SCHEDULER.with_mut_ref(|scheduler| {
         if !scheduler.ready_tasks.is_empty() {
-            let mut current_task = scheduler.current_task.take().unwrap();
-            let mut next_task = scheduler.ready_tasks.pop_front().unwrap();
-            let current_task_ptr = Box::<Task>::as_mut_ptr(&mut current_task);
-            let next_task_ptr = Box::<Task>::as_mut_ptr(&mut next_task);
+            let current_task = scheduler.current_task.take().unwrap();
+            let next_task = scheduler.ready_tasks.pop_front().unwrap();
 
-            current_task.time_used += elapsed;
+            let current_task_ptr = current_task.with_mut_ref(|task| {
+                task.time_used += elapsed;
+                task.state = State::ReadyToRun;
+
+                core::ptr::from_mut(task)
+            });
+
+            let next_task_ptr = next_task.with_mut_ref(|task| {
+                task.state = State::Running;
+
+                core::ptr::from_mut(task)
+            });
 
             scheduler.current_task.replace(next_task);
             scheduler.ready_tasks.push_back(current_task);
@@ -235,5 +312,112 @@ pub fn schedule() {
             unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
         }
     });
+
     x86_64::instructions::interrupts::enable();
+}
+
+pub fn block_task(reason: BlockedReason) {
+    crate::println!("blocking");
+    x86_64::instructions::interrupts::disable();
+
+    let elapsed = get_time_elapsed();
+
+    SCHEDULER.with_mut_ref(|scheduler| {
+        if !scheduler.ready_tasks.is_empty() {
+            let current_task = scheduler.current_task.take().unwrap();
+            let next_task = scheduler.ready_tasks.pop_front().unwrap();
+
+            let current_task_ptr = current_task.with_mut_ref(|task| {
+                task.time_used += elapsed;
+                task.state = State::Blocked(reason);
+                debug!("blocking task {}", task.common_name);
+
+                core::ptr::from_mut(task)
+            });
+
+            let next_task_ptr = next_task.with_mut_ref(|task| {
+                task.state = State::Running;
+
+                core::ptr::from_mut(task)
+            });
+
+            scheduler.current_task.replace(next_task);
+            scheduler.blocked_tasks.push_back(current_task);
+
+            unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
+        }
+    });
+
+    x86_64::instructions::interrupts::enable();
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum UnblockingError {
+    #[error("Unable to find any blocked tasks with a matching id")]
+    FailedToFindBlockedTask,
+}
+
+pub fn unblock_task(task: Arc<Spinlock<Task>>) {
+    x86_64::instructions::interrupts::disable();
+
+    let elapsed = get_time_elapsed();
+
+    SCHEDULER.with_mut_ref(|scheduler| {
+        let current_task = scheduler.current_task.take().unwrap();
+        let next_task = task;
+
+        let current_task_ptr = current_task.with_mut_ref(|task| {
+            task.time_used += elapsed;
+            task.state = State::ReadyToRun;
+
+            core::ptr::from_mut(task)
+        });
+
+        let next_task_ptr = next_task.with_mut_ref(|task| {
+            task.state = State::Running;
+            debug!("unblocking task {}", task.common_name);
+
+            core::ptr::from_mut(task)
+        });
+
+        // no tasks were running before hand so preempt
+        if scheduler.ready_tasks.is_empty() {
+            scheduler.current_task.replace(next_task);
+            scheduler.ready_tasks.push_back(current_task);
+
+            unsafe {
+                switch_to_task(current_task_ptr, next_task_ptr);
+            }
+        } else {
+            scheduler.current_task.replace(current_task);
+            scheduler.ready_tasks.push_back(next_task);
+        }
+    });
+    x86_64::instructions::interrupts::enable();
+}
+
+/// This function will unblock the task wit the associated id.
+///
+/// # Errors
+///
+/// This function will return an error if no matching task can be found.
+pub fn unblock_task_id(task_id: TaskID) -> Result<(), UnblockingError> {
+    let task = SCHEDULER.with_mut_ref(|scheduler| {
+        scheduler
+            .blocked_tasks
+            .extract_if(|b_task| b_task.acquire().id == task_id)
+            .next()
+            .ok_or(UnblockingError::FailedToFindBlockedTask)
+    })?;
+
+    unblock_task(task);
+
+    Ok(())
+}
+
+pub fn sleep(duration: Duration) {
+    let instant = TIME_KEEPER
+        .with_ref(|time| time.time_since_boot.time)
+        .get_nanoseconds();
+    block_task(BlockedReason::SleepingUntil(duration + instant));
 }
