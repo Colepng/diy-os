@@ -22,7 +22,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, string::String};
+use alloc::string::String;
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
@@ -37,11 +37,7 @@ use diy_os::{
     multitasking::{SCHEDULER, Task, sleep},
     pit::PitFrequency,
     println,
-    ps2::{
-        CONTROLLER, GenericPS2Controller, PS1_DEVICE,
-        controller::PS2Controller,
-        devices::{keyboard::Keyboard, ps2_device_1_task},
-    },
+    ps2::devices::ps2_device_1_task,
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use log::{Level, debug, trace};
@@ -83,13 +79,6 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     };
 
     println!("Hello, world!");
-
-    let gernaric = GenericPS2Controller::new();
-
-    let gernaric = gernaric.initialize();
-
-    CONTROLLER.with_mut_ref(|controller| controller.replace(gernaric));
-    PS1_DEVICE.with_mut_ref(|ps1| ps1.replace(Box::new(Keyboard::new())));
 
     setup_tasks(&mut mapper, &mut frame_allocator)?;
 }
