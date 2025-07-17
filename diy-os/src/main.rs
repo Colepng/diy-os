@@ -101,43 +101,36 @@ fn setup_tasks(
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
     // main task starts here
     // # SAFETY: ps2_device_1_task calls schedule once per loop
-    let ps2_task = unsafe {
-        Task::new(
+    let ps2_task = Task::new(
             String::from("PS/2 Deivce 1 Task"),
-            ps2_device_1_task,
-            mapper,
-            frame_allocator,
-        )
-    };
+        ps2_device_1_task,
+        mapper,
+        frame_allocator,
+    );
 
     // # SAFETY: process_keys calls schedule once per loop
-    let keys_task = unsafe {
-        Task::new(
-            String::from("Proccess keys"),
-            process_keys,
-            mapper,
-            frame_allocator,
-        )
-    };
+    let keys_task = Task::new(
+        String::from("Proccess keys"),
+        process_keys,
+        mapper,
+        frame_allocator,
+    );
 
     // # SAFETY: kernal_shell calle schedule once per loop
-    let shell_task = unsafe {
-        Task::new(
-            String::from("Kernal Shell"),
-            kernal_shell,
-            mapper,
-            frame_allocator,
-        )
-    };
+    let shell_task = Task::new(
+        String::from("Kernal Shell"),
+        kernal_shell,
+        mapper,
+        frame_allocator,
+    );
 
-    let blocked_task = unsafe {
-        Task::new(
-            String::from("Blocked Task"),
+    let blocked_task = Task::new(
+        String::from("Blocked Task"),
             to_be_slept,
             mapper,
             frame_allocator,
-        )
-    };
+    );
+
 
     let (_ps2_task, _keys_task, _shell_task, _blocked_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);

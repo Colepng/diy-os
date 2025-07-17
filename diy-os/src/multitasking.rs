@@ -174,10 +174,7 @@ pub enum TaskBuildError {
 impl Task {
     #[allow(clippy::new_ret_no_self)]
     /// Allocates and insets a new task the linked list
-    ///
-    /// # Safety
-    /// callers must ensure the function ptr calls the [`schedule`] frequently.
-    pub unsafe fn new(
+    pub fn new(
         common_name: String,
         task_fn: fn() -> !,
         mapper: &mut impl Mapper<Size4KiB>,
