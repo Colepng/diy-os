@@ -1,7 +1,8 @@
+use crate::hlt_loop;
 use crate::timer::{Duration, Miliseconds, TIME_KEEPER, TimeKeeper};
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use log::{debug, info};
 use spinlock::Spinlock;
@@ -21,6 +22,8 @@ pub struct Scheduler {
     current_task: Option<Arc<Spinlock<Task>>>,
     ready_tasks: LinkedList<Arc<Spinlock<Task>>>,
     blocked_tasks: LinkedList<Arc<Spinlock<Task>>>,
+    dead_tasks: LinkedList<Arc<Spinlock<Task>>>,
+    cleaner_task: Option<Arc<Spinlock<Task>>>,
     pub time_slice: Duration,
 }
 
@@ -29,9 +32,11 @@ impl Scheduler {
 
     const fn new() -> Self {
         Self {
-            current_task: Option::None,
+            current_task: None,
             ready_tasks: LinkedList::new(),
             blocked_tasks: LinkedList::new(),
+            dead_tasks: LinkedList::new(),
+            cleaner_task: None,
             time_slice: Self::TIME_SLICE_AMOUNT,
         }
     }
@@ -40,22 +45,37 @@ impl Scheduler {
     ///
     /// # Panics
     ///
-    /// Panics if the first task was already test.
+    /// Panics if the first task was already set.
     pub fn set_first_task(&mut self, task: Task) {
         assert!(self.current_task.is_none());
 
         self.current_task.replace(Arc::new(Spinlock::new(task)));
     }
 
+    pub fn setup_special_tasks(
+        &mut self,
+        mapper: &mut impl Mapper<Size4KiB>,
+        frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+    ) {
+        let cleaner_task = Task::new(String::from("Cleaner"), cleaner_task, mapper, frame_alloc);
+        let idle_task = Task::new(String::from("idle"), idle_task, mapper, frame_alloc);
+
+        self.spawn_task(cleaner_task);
+        self.spawn_task(idle_task);
+    }
+
     pub fn get_current_task(&self) -> Option<Arc<Spinlock<Task>>> {
         self.current_task.clone()
     }
 
-    pub fn spawn_task(&mut self, task: Task) -> Arc<Spinlock<Task>> {
+    pub fn spawn_task(&mut self, task: Task) -> Weak<Spinlock<Task>> {
         let task = Arc::new(Spinlock::new(task));
-        self.ready_tasks.push_back(task.clone());
 
-        task
+        let weak = Arc::downgrade(&task);
+
+        self.ready_tasks.push_back(task);
+
+        weak
     }
 
     /// Wakes up the sleeping tasks that have completed.
@@ -122,12 +142,24 @@ impl Scheduler {
 
         println!("time_slice: {}", self.time_slice);
     }
+
+    pub fn is_idle(&self) -> bool {
+        self.current_task
+            .clone()
+            .is_some_and(|task| task.acquire().common_name == "idle")
+    }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockedReason {
     Paused,
     SleepingUntil(Duration),
+    Special(SpecialCases),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpecialCases {
+    Cleaner,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -135,6 +167,7 @@ pub enum State {
     Running,
     ReadyToRun,
     Blocked(BlockedReason),
+    Dead,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -243,7 +276,8 @@ impl Task {
         let name = &self.common_name;
         let id = &self.id;
         let state = &self.state;
-        crate::println!("\tname: {name}\n\tid: {id:?}\n\tstate:{state:?}");
+        let time_used = &self.time_used;
+        crate::println!("\tname: {name}\n\tid: {id:?}\n\tstate:{state:?}\n\ttime used:{time_used}");
     }
 }
 
@@ -357,7 +391,9 @@ pub unsafe fn schedule() {
                 scheduler.ready_tasks.push_back(current_task);
                 scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
-                unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
+                unsafe {
+                    switch_to_task(current_task_ptr, next_task_ptr);
+                }
             }
         });
     });
@@ -391,8 +427,18 @@ pub unsafe fn block_task(reason: BlockedReason) {
                     core::ptr::from_mut(task)
                 });
 
+                match reason {
+                    BlockedReason::Special(special_cases) => match special_cases {
+                        SpecialCases::Cleaner => {
+                            scheduler.cleaner_task.replace(current_task);
+                        }
+                    },
+                    _ => {
+                        scheduler.blocked_tasks.push_front(current_task);
+                    }
+                }
+
                 scheduler.current_task.replace(next_task);
-                scheduler.blocked_tasks.push_back(current_task);
                 scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
                 unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
@@ -490,4 +536,71 @@ pub fn sleep(duration: Duration) {
     unsafe {
         block_task(BlockedReason::SleepingUntil(duration + instant));
     }
+}
+
+/// Terminate the current task and wakes up the cleaner.
+///
+/// # Safety
+///
+/// [`SCHEDULER`] must not be held.
+pub unsafe fn exit() -> ! {
+    without_interrupts(|| {
+        SCHEDULER.with_mut_ref(|scheduler| {
+            // TODO: replace with unreachable
+            let current_task = scheduler.current_task.take().unwrap();
+            let next_task = scheduler.ready_tasks.pop_front().unwrap();
+
+            let current_task_ptr = current_task.with_mut_ref(|task| {
+                task.state = State::Dead;
+
+                core::ptr::from_mut(task)
+            });
+
+            let next_task_ptr = next_task.with_mut_ref(|task| {
+                task.state = State::Running;
+
+                core::ptr::from_mut(task)
+            });
+
+            scheduler.current_task.replace(next_task);
+            scheduler.dead_tasks.push_back(current_task);
+            scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
+
+            let cleaner = scheduler.cleaner_task.take().unwrap();
+
+            scheduler.ready_task(cleaner);
+
+            unsafe {
+                switch_to_task(current_task_ptr, next_task_ptr);
+            }
+        });
+    });
+
+    panic!("this should be unreachable");
+}
+
+fn cleanup_task(_task: Task) {
+    //TODO to free the stack page used;
+}
+
+fn cleaner_task() -> ! {
+    loop {
+        SCHEDULER.with_mut_ref(|scheduler| {
+            while let Some(task) = scheduler.dead_tasks.pop_front() {
+                let task = Arc::into_inner(task).unwrap();
+                let task = task.into_inner();
+                info!("killing task {}", task.common_name);
+
+                cleanup_task(task);
+            }
+
+            info!("done killing tasks, going to sleep");
+        });
+
+        unsafe { block_task(BlockedReason::Special(SpecialCases::Cleaner)) };
+    }
+}
+
+fn idle_task() -> ! {
+    hlt_loop()
 }

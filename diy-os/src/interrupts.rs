@@ -34,7 +34,8 @@ lazy_static! {
                 .set_handler_fn(invalid_opcode_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
 
-            let addr = HandlerFuncType::to_virt_addr(double_fault_handler as HandlerFuncWithErrCode);
+            let addr =
+                HandlerFuncType::to_virt_addr(double_fault_handler as HandlerFuncWithErrCode);
 
             idt.double_fault
                 .set_handler_addr(addr)
@@ -126,7 +127,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     let should_schedule = SCHEDULER.try_acquire().is_some_and(|mut sched| {
         sched.wake_up_sleeping_tasks(&mut counter);
         drop(counter);
-        if sched.time_slice.nanoseconds <= TimeKeeper::TICK_AMOUNT {
+        if sched.is_idle() || sched.time_slice.nanoseconds <= TimeKeeper::TICK_AMOUNT {
             sched.time_slice = Scheduler::TIME_SLICE_AMOUNT;
             drop(sched);
             true

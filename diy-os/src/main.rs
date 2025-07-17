@@ -34,9 +34,9 @@ use diy_os::{
     hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
-    multitasking::{SCHEDULER, Task, sleep},
+    multitasking::{SCHEDULER, Task, exit, sleep},
     pit::PitFrequency,
-    println,
+    print, println,
     ps2::devices::ps2_device_1_task,
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
@@ -96,13 +96,14 @@ fn setup_tasks(
 
     SCHEDULER.with_mut_ref(|scheduler| {
         scheduler.set_first_task(current_task);
+        scheduler.setup_special_tasks(mapper, frame_allocator);
     });
 
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
     // main task starts here
     // # SAFETY: ps2_device_1_task calls schedule once per loop
     let ps2_task = Task::new(
-            String::from("PS/2 Deivce 1 Task"),
+        String::from("PS/2 Deivce 1 Task"),
         ps2_device_1_task,
         mapper,
         frame_allocator,
@@ -126,23 +127,30 @@ fn setup_tasks(
 
     let blocked_task = Task::new(
         String::from("Blocked Task"),
-            to_be_slept,
-            mapper,
-            frame_allocator,
+        to_be_slept,
+        mapper,
+        frame_allocator,
     );
 
+    let dead_task = Task::new(
+        String::from("im gonna die"),
+        to_be_killed,
+        mapper,
+        frame_allocator,
+    );
 
     let (_ps2_task, _keys_task, _shell_task, _blocked_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
         let blocked_task = scheduler.spawn_task(blocked_task);
+        let _ = scheduler.spawn_task(dead_task);
 
         (ps2_task, keys_task, shell_task, blocked_task)
     });
 
     loop {
-        sleep(Seconds(30).into());
+        sleep(Seconds(1).into());
         debug!("Main task is still running properly");
         println!("Main task is still running properly");
     }
@@ -153,6 +161,14 @@ fn to_be_slept() -> ! {
         println!("not sleeping");
         sleep(Duration::from(Seconds(10)));
     }
+}
+
+fn to_be_killed() -> ! {
+    println!("im gonna die now");
+
+    sleep(Seconds(10).into());
+
+    unsafe { exit() };
 }
 
 fn kernal_shell() -> ! {
@@ -231,9 +247,6 @@ fn kernal_shell() -> ! {
 
             input.clear();
         }
-
-        // unsafe { schedule() };
-        // diy_os::print!("]");
     }
 }
 
@@ -250,19 +263,33 @@ fn rsp() -> u64 {
 #[cfg(not(test))] // new attribute
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
-    diy_os::logger::LOGGER
-        .with_ref(|logger| logger.get_events().for_each(|event| println!("{}", event)));
+    use diy_os::framebuffer;
 
-    if let Some(scheduler) = SCHEDULER.try_acquire() {
-        let task = scheduler.get_current_task();
-        if let Some(task) = task
-            && let Some(task) = task.try_acquire()
-        {
-            println!("{:#?}", task);
-        }
+    if framebuffer::FRAME_BUFER.is_acquired() {
+        use diy_os::serial;
+
+        framebuffer::FRAME_BUFER.release();
+        serial::SERIAL1.release();
+
+        print!("forced release");
     } else {
-        println!("scheduler was locked");
+        println!("{}", info);
+        if let Some(logger) = diy_os::logger::LOGGER.try_acquire() {
+            logger.get_events().for_each(|event| println!("{}", event));
+        } else {
+            println!("logger was locked");
+        }
+
+        if let Some(scheduler) = SCHEDULER.try_acquire() {
+            let task = scheduler.get_current_task();
+            if let Some(task) = task
+                && let Some(task) = task.try_acquire()
+            {
+                println!("{:#?}", task);
+            }
+        } else {
+            println!("scheduler was locked");
+        }
     }
 
     hlt_loop();
