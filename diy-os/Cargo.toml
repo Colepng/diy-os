@@ -31,3 +31,7 @@ bench = false
 [lib]
 test = false
 bench = false
+
+
+[features]
+debug = []
