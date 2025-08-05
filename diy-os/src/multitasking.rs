@@ -569,9 +569,10 @@ pub unsafe fn exit() -> ! {
             scheduler.dead_tasks.push_back(current_task);
             scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
-            let cleaner = scheduler.cleaner_task.take().unwrap();
-
-            scheduler.ready_task(cleaner);
+            // If cleaner is not in it's field it must already be ready
+            if let Some(cleaner) = scheduler.cleaner_task.take() {
+                scheduler.ready_task(cleaner);
+            }
 
             unsafe {
                 switch_to_task(current_task_ptr, next_task_ptr);
