@@ -26,7 +26,9 @@ impl<T> Mutex<T> {
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
             .is_err()
         {
-            unsafe { schedule(); };
+            unsafe {
+                schedule();
+            };
         }
 
         MutexGuard { inner: self }
@@ -61,8 +63,8 @@ impl<T> Mutex<T> {
     }
 }
 
-unsafe impl<T: Send> Send for Mutex<T> { } 
-unsafe impl<T: Send> Sync for Mutex<T> { }
+unsafe impl<T: Send> Send for Mutex<T> {}
+unsafe impl<T: Send> Sync for Mutex<T> {}
 
 pub struct MutexGuard<'a, T> {
     inner: &'a Mutex<T>,

@@ -34,7 +34,7 @@ use diy_os::{
     hlt_loop,
     human_input_devices::{process_keys, STDIN},
     kernel_early,
-    multitasking::{exit, mutex::Mutex, sleep, Task, SCHEDULER},
+    multitasking::{SCHEDULER, Task, sleep},
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
@@ -125,89 +125,18 @@ fn setup_tasks(
         frame_allocator,
     );
 
-    let blocked_task = Task::new(
-        String::from("Blocked Task"),
-        to_be_slept,
-        mapper,
-        frame_allocator,
-    );
-
-    let dead_task = Task::new(
-        String::from("im gonna die"),
-        to_be_killed,
-        mapper,
-        frame_allocator,
-    );
-
-    let counter_1 = Task::new(
-        String::from("counter 1"),
-        counter_1,
-        mapper,
-        frame_allocator,
-    );
-
-    let counter_2 = Task::new(
-        String::from("counter 2"),
-        counter_2,
-        mapper,
-        frame_allocator,
-    );
-
-    let (_ps2_task, _keys_task, _shell_task, _blocked_task) = SCHEDULER.with_mut_ref(|scheduler| {
+    let (_ps2_task, _keys_task, _shell_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
-        let blocked_task = scheduler.spawn_task(blocked_task);
-        let _ = scheduler.spawn_task(dead_task);
-        let _ = scheduler.spawn_task(counter_1);
-        let _ = scheduler.spawn_task(counter_2);
 
-        (ps2_task, keys_task, shell_task, blocked_task)
+        (ps2_task, keys_task, shell_task)
     });
 
     loop {
         sleep(Seconds(1).into());
         debug!("Main task is still running properly");
-        println!("Main task is still running properly");
     }
-}
-
-fn to_be_slept() -> ! {
-    loop {
-        println!("not sleeping");
-        sleep(Duration::from(Seconds(10)));
-    }
-}
-
-fn to_be_killed() -> ! {
-    println!("im gonna die now");
-
-    sleep(Seconds(10).into());
-
-    unsafe { exit() };
-}
-
-static COUNTER: Mutex<u8> = Mutex::new(0);
-
-fn counter_1() -> ! {
-    println!("getting mutex");
-    let mut counter = COUNTER.acquire();
-    *counter += 1;
-    sleep(Seconds(1).into());
-    drop(counter);
-    println!("released mutex");
-
-    unsafe { exit() }
-}
-
-fn counter_2() -> ! {
-    println!("trying to get mutex");
-    let counter = COUNTER.acquire();
-    println!("counter: {}", counter);
-    drop(counter);
-    println!("droped counter");
-
-    unsafe { exit() }
 }
 
 fn kernal_shell() -> ! {

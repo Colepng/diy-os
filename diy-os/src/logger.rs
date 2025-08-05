@@ -3,9 +3,12 @@ use core::fmt::Display;
 use alloc::vec::Vec;
 use log::Level;
 
-use crate::{multitasking::mutex::Mutex, timer::{Duration, TIME_KEEPER}};
+use crate::{
+    multitasking::mutex::Mutex,
+    timer::{Duration, TIME_KEEPER},
+};
 
-/// Since logger is held by a mutex it gains the condition that it can't be used 
+/// Since logger is held by a mutex it gains the condition that it can't be used
 /// by interrupt handlers.
 pub static LOGGER: Mutex<Logger> = Mutex::new(Logger::new());
 
