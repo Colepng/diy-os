@@ -11,6 +11,8 @@ use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 use x86_64::{registers::control::Cr3, structures::paging::PhysFrame};
 
+pub mod mutex;
+
 // TEMP, this is not checked big UB!
 // Setup some way to track used pages
 static STACK_COUNTER: Spinlock<u64> = Spinlock::new(0);
@@ -153,6 +155,7 @@ impl Scheduler {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BlockedReason {
     Paused,
+    WaitingForMutex,
     SleepingUntil(Duration),
     Special(SpecialCases),
 }

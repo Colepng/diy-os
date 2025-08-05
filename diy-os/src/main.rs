@@ -32,9 +32,9 @@ use core::panic::PanicInfo;
 use diy_os::{
     filesystem::ustar,
     hlt_loop,
-    human_input_devices::{STDIN, process_keys},
+    human_input_devices::{process_keys, STDIN},
     kernel_early,
-    multitasking::{SCHEDULER, Task, exit, sleep},
+    multitasking::{exit, mutex::Mutex, sleep, Task, SCHEDULER},
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
@@ -139,12 +139,28 @@ fn setup_tasks(
         frame_allocator,
     );
 
+    let counter_1 = Task::new(
+        String::from("counter 1"),
+        counter_1,
+        mapper,
+        frame_allocator,
+    );
+
+    let counter_2 = Task::new(
+        String::from("counter 2"),
+        counter_2,
+        mapper,
+        frame_allocator,
+    );
+
     let (_ps2_task, _keys_task, _shell_task, _blocked_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
         let blocked_task = scheduler.spawn_task(blocked_task);
         let _ = scheduler.spawn_task(dead_task);
+        let _ = scheduler.spawn_task(counter_1);
+        let _ = scheduler.spawn_task(counter_2);
 
         (ps2_task, keys_task, shell_task, blocked_task)
     });
@@ -169,6 +185,29 @@ fn to_be_killed() -> ! {
     sleep(Seconds(10).into());
 
     unsafe { exit() };
+}
+
+static COUNTER: Mutex<u8> = Mutex::new(0);
+
+fn counter_1() -> ! {
+    println!("getting mutex");
+    let mut counter = COUNTER.acquire();
+    *counter += 1;
+    sleep(Seconds(1).into());
+    drop(counter);
+    println!("released mutex");
+
+    unsafe { exit() }
+}
+
+fn counter_2() -> ! {
+    println!("trying to get mutex");
+    let counter = COUNTER.acquire();
+    println!("counter: {}", counter);
+    drop(counter);
+    println!("droped counter");
+
+    unsafe { exit() }
 }
 
 fn kernal_shell() -> ! {
