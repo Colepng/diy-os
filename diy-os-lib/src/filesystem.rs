@@ -1,3 +1,4 @@
+pub mod gpt;
 pub mod ustar;
 
 pub trait File {
