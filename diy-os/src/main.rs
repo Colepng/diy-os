@@ -30,7 +30,8 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    RamdiskInfo, hlt_loop,
+    filesystem::gpt::PartionTableHeader,
+    hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
@@ -71,27 +72,29 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
+    use diy_os::filesystem::gpt::mbr::MBR;
+
     let frequency = refine_const!(1000u32, PitFrequency);
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
-    info!("start_address {:X}", 0x0000_0000_0804_aff8);
-    info!("start_address {:X}", 0x0000_0000_0804_aff8 + 4000 * 3);
-    info!("allocater start {:?}", diy_os::allocator::HEAP_START);
-    info!("allocater end {:?}", unsafe {
-        diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
-    });
-
     if let Some(addr) = boot_info.ramdisk_addr.into_option() {
-        info!("ramdisk start {addr:X}");
-        info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
+        let ptr = core::ptr::without_provenance::<MBR>(usize::try_from(addr).unwrap());
+        let data = unsafe { ptr.read_unaligned() };
+        let signature = data.signature;
+        println!("data: {:#?}", signature);
+        let partion = data.partion_record[0];
+        println!("partion: {:#?}", partion);
 
-        let ramdisk_info = RamdiskInfo {
-            addr,
-            len: boot_info.ramdisk_len,
-        };
-
-        diy_os::RAMDISK_INFO.with_mut_ref(|info| info.replace(ramdisk_info));
+        let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
+        let header = unsafe { header_ptr.read() };
+        println!("{:#?}", header.signature.valid());
     }
+
+    // let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
+    //     Some(unsafe { ustar::Ustar::new(addr.try_into()?) })
+    // } else {
+    //     None
+    // };
 
     println!("Hello, world!");
 
