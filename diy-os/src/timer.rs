@@ -84,37 +84,37 @@ impl<T: Into<Self>> core::ops::Sub<T> for Nanoseconds {
     }
 }
 
-impl From<Nanoseconds> for Seconds {
+impl const From<Nanoseconds> for Seconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000_000_000)
     }
 }
 
-impl From<Nanoseconds> for Miliseconds {
+impl const From<Nanoseconds> for Miliseconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000_000)
     }
 }
 
-impl From<Nanoseconds> for Microseconds {
+impl const From<Nanoseconds> for Microseconds {
     fn from(value: Nanoseconds) -> Self {
         Self(value.0 / 1_000)
     }
 }
 
-impl From<Seconds> for Nanoseconds {
+impl const From<Seconds> for Nanoseconds {
     fn from(value: Seconds) -> Self {
         Self(value.0 * 1_000_000_000)
     }
 }
 
-impl From<Miliseconds> for Nanoseconds {
+impl const From<Miliseconds> for Nanoseconds {
     fn from(value: Miliseconds) -> Self {
         Self(value.0 * 1_000_000)
     }
 }
 
-impl From<Microseconds> for Nanoseconds {
+impl const From<Microseconds> for Nanoseconds {
     fn from(value: Microseconds) -> Self {
         Self(value.0 * 1_000)
     }
@@ -122,10 +122,16 @@ impl From<Microseconds> for Nanoseconds {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Duration {
-    nanoseconds: Nanoseconds,
+    pub nanoseconds: Nanoseconds,
 }
 
-impl<T: Into<Nanoseconds>> From<T> for Duration {
+impl Duration {
+    pub const fn get_nanoseconds(&self) -> Nanoseconds {
+        self.nanoseconds
+    }
+}
+
+impl<T: [const] Into<Nanoseconds>> const From<T> for Duration {
     fn from(value: T) -> Self {
         Self {
             nanoseconds: value.into(),
@@ -140,6 +146,22 @@ impl<T: Into<Nanoseconds>> core::ops::Add<T> for Duration {
         Self {
             nanoseconds: self.nanoseconds + rhs,
         }
+    }
+}
+
+impl<T: Into<Nanoseconds>> core::ops::Sub<T> for Duration {
+    type Output = Self;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        Self {
+            nanoseconds: self.nanoseconds - rhs,
+        }
+    }
+}
+
+impl<T: Into<Nanoseconds>> core::ops::SubAssign<T> for Duration {
+    fn sub_assign(&mut self, rhs: T) {
+        self.nanoseconds = self.nanoseconds - rhs;
     }
 }
 
@@ -192,6 +214,7 @@ impl Counter {
 
 pub struct TimeKeeper {
     pub tick_amount: Nanoseconds,
+    pub time_since_boot: Counter,
     pub sleep_counter: u64,
     pub timer_counter: Counter,
     pub keyboard_counter: Counter,
@@ -200,10 +223,12 @@ pub struct TimeKeeper {
 }
 
 impl TimeKeeper {
+    pub const TICK_AMOUNT: Nanoseconds = Nanoseconds(1_000_000);
     pub const fn new() -> Self {
         Self {
-            tick_amount: Nanoseconds(1_000_000),
+            tick_amount: Self::TICK_AMOUNT,
             sleep_counter: 0,
+            time_since_boot: Counter::new(),
             timer_counter: Counter::new(),
             keyboard_counter: Counter::new(),
             log_counter: Counter::new(),
@@ -213,6 +238,7 @@ impl TimeKeeper {
 
     pub fn tick(&mut self) {
         self.sleep_counter = self.sleep_counter.saturating_sub(1);
+        self.time_since_boot.time += self.tick_amount.into();
         self.timer_counter.time += self.tick_amount.into();
         self.keyboard_counter.time += self.tick_amount.into();
         self.log_counter.time += self.tick_amount.into();
