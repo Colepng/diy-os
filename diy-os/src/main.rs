@@ -311,25 +311,30 @@ fn panic(info: &PanicInfo) -> ! {
         serial::SERIAL1.release();
 
         print!("forced release");
-    } else {
-        println!("{}", info);
-        if let Some(logger) = diy_os::logger::LOGGER.try_acquire() {
-            logger.get_events().for_each(|event| println!("{}", event));
-        } else {
-            println!("logger was locked");
-        }
-
-        if let Some(scheduler) = SCHEDULER.try_acquire() {
-            let task = scheduler.get_current_task();
-            if let Some(task) = task
-                && let Some(task) = task.try_acquire()
-            {
-                println!("{:#?}", task);
-            }
-        } else {
-            println!("scheduler was locked");
-        }
     }
+
+    println!("{}", info);
+    if diy_os::logger::LOGGER.is_acquired() {
+        println!("logger was locked, cracking it open");
+
+        diy_os::logger::LOGGER.release();
+    }
+
+    diy_os::logger::LOGGER.with_ref(|logger| {
+        logger.get_events().for_each(|event| println!("{}", event));
+    });
+
+    if SCHEDULER.is_acquired() {
+        println!("scheduler was locked");
+
+        println!("forcing open");
+
+        SCHEDULER.release();
+    }
+
+    SCHEDULER.with_ref(|sched| {
+        sched.print_state();
+    });
 
     hlt_loop();
 }

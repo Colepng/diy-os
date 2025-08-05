@@ -35,6 +35,30 @@ impl<T> Mutex<T> {
     pub fn release(&self) {
         self.locked.store(false, Ordering::Release);
     }
+
+    pub fn is_acquired(&self) -> bool {
+        self.locked.load(Ordering::Acquire)
+    }
+
+    /// Runs a closure mutable referencing the locked value
+    pub fn with_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.acquire();
+
+        f(&guard)
+    }
+
+    /// Runs a closure mutable referencing the locked value
+    pub fn with_mut_ref<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.acquire();
+
+        f(&mut guard)
+    }
 }
 
 unsafe impl<T: Send> Send for Mutex<T> { } 

@@ -2,15 +2,13 @@ use alloc::vec::Vec;
 use core::mem::{Assume, TransmuteFrom};
 
 use crate::{
-    multitasking::sleep,
+    multitasking::{mutex::Mutex, sleep},
     timer::{Duration, Miliseconds, TIME_KEEPER},
 };
 
-use spinlock::Spinlock;
+pub(crate) static KEYMAP: Mutex<Keymap> = Mutex::new(Keymap::new());
 
-pub(crate) static KEYMAP: Spinlock<Keymap> = Spinlock::new(Keymap::new());
-
-pub static STDIN: Spinlock<Vec<Keycode>> = Spinlock::new(Vec::new());
+pub static STDIN: Mutex<Vec<Keycode>> = Mutex::new(Vec::new());
 
 #[repr(u8)]
 #[derive(Debug)]

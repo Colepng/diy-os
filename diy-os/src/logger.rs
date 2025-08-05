@@ -3,10 +3,11 @@ use core::fmt::Display;
 use alloc::vec::Vec;
 use log::Level;
 
-use crate::timer::{Duration, TIME_KEEPER};
-use spinlock::Spinlock;
+use crate::{multitasking::mutex::Mutex, timer::{Duration, TIME_KEEPER}};
 
-pub static LOGGER: Spinlock<Logger> = Spinlock::new(Logger::new());
+/// Since logger is held by a mutex it gains the condition that it can't be used 
+/// by interrupt handlers.
+pub static LOGGER: Mutex<Logger> = Mutex::new(Logger::new());
 
 pub fn store(text: &'static str, level: Level) {
     LOGGER.with_mut_ref(|logger| {
