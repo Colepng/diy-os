@@ -30,7 +30,7 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::gpt::PartionTableHeader,
+    filesystem::gpt::{PartitionEntry, PartionTableHeader},
     hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
@@ -82,6 +82,19 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
         let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
         let header = unsafe { header_ptr.read() };
         println!("is valid header?: {:#?}", header.validate(addr));
+
+        assert!(128 == header.size_of_partion_entry);
+        let partion_lba = header.partion_entry_lba;
+        let partion_ptr = core::ptr::without_provenance::<PartitionEntry>(usize::try_from(
+            addr + (partion_lba * 512),
+        )?);
+        let slice =
+            core::ptr::slice_from_raw_parts(partion_ptr, usize::try_from(header.num_of_partions)?);
+        let slice = unsafe { slice.as_ref().unwrap() };
+        let partion = slice[0];
+        let name = partion.name();
+
+        println!("partion {name}, {:#?}", partion);
     }
 
     println!("Hello, world!");
