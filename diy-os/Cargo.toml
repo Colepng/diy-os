@@ -15,6 +15,7 @@ spinlock = { version = "0.1.0", path = "../spinlock" }
 log = "0.4.27"
 kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 refine = { git = "https://github.com/Colepng/Refinement-types" }
+crc32fast = { version = "1.5.0", default-features = false }
 diy-os = { path = "../diy-os-lib" }
 qemu-exit = "3.0.2"
 
