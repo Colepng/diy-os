@@ -1,3 +1,6 @@
+// reference docs at https://web.archive.org/web/20250610025442/https://uefi.org/specs/UEFI/2.10/05_GUID_Partition_Table_Format.html
+// and https://web.archive.org/web/20250630111613/https://wiki.osdev.org/GPT#Layout and https://web.archive.org/web/20250306133759/http://wiki.osdev.org/Partition_Table
+// wayback machine links incase any content changes or disappears
 use core::fmt::Debug;
 use core::{ascii::Char, mem::TransmuteFrom};
 
