@@ -20,9 +20,9 @@ pub struct PartionTableHeader {
     first_usable_logical_block: u64,
     last_usable_logical_block: u64,
     disk_guid: u128,
-    partion_entry_lba: u64,
-    num_of_partions: u32,
-    size_of_partion_entry: u32,
+    pub partion_entry_lba: u64,
+    pub num_of_partions: u32,
+    pub size_of_partion_entry: u32,
     crc32_partion_entry_array: u32,
 }
 
