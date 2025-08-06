@@ -79,11 +79,7 @@ impl PartionTableHeader {
 
         copy.crc32_checksum = 0;
         // Safe to transmute since the transmute from validates all conditions
-        let bytes = unsafe {
-            <[u8; size_of::<Self>()] as TransmuteFrom<Self>>::transmute(
-                copy,
-            )
-        };
+        let bytes = unsafe { <[u8; size_of::<Self>()] as TransmuteFrom<Self>>::transmute(copy) };
         let hash = crc32fast::hash(&bytes);
 
         hash == checksum
@@ -109,8 +105,13 @@ impl PartionTableHeader {
         let checksum = self.crc32_partion_entry_array;
 
         // assuming block/sector size is 512 bytes
-        let ptr_to_start: *const u8 = core::ptr::without_provenance(usize::try_from(addr_of_memmaped_drive + (self.partion_entry_lba * 512)).unwrap());
-        let bytes = core::ptr::slice_from_raw_parts(ptr_to_start, usize::try_from(self.size_of_partion_entry * self.num_of_partions).unwrap());
+        let ptr_to_start: *const u8 = core::ptr::without_provenance(
+            usize::try_from(addr_of_memmaped_drive + (self.partion_entry_lba * 512)).unwrap(),
+        );
+        let bytes = core::ptr::slice_from_raw_parts(
+            ptr_to_start,
+            usize::try_from(self.size_of_partion_entry * self.num_of_partions).unwrap(),
+        );
         let bytes = unsafe { bytes.as_ref().unwrap() };
 
         let hash = crc32fast::hash(bytes);
