@@ -78,22 +78,11 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     if let Some(addr) = boot_info.ramdisk_addr.into_option() {
         let ptr = core::ptr::without_provenance::<MBR>(usize::try_from(addr).unwrap());
-        let data = unsafe { ptr.read_unaligned() };
-        let signature = data.signature;
-        println!("data: {:#?}", signature);
-        let partion = data.partion_record[0];
-        println!("partion: {:#?}", partion);
 
         let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
         let header = unsafe { header_ptr.read() };
-        println!("{:#?}", header.signature.valid());
+        println!("is valid header?: {:#?}", header.validate(addr));
     }
-
-    // let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
-    //     Some(unsafe { ustar::Ustar::new(addr.try_into()?) })
-    // } else {
-    //     None
-    // };
 
     println!("Hello, world!");
 
