@@ -1,12 +1,14 @@
 // reference docs at https://web.archive.org/web/20250610025442/https://uefi.org/specs/UEFI/2.10/05_GUID_Partition_Table_Format.html
 // and https://web.archive.org/web/20250630111613/https://wiki.osdev.org/GPT#Layout and https://web.archive.org/web/20250306133759/http://wiki.osdev.org/Partition_Table
 // wayback machine links incase any content changes or disappears
+use core::ffi::{CStr, c_char};
 use core::fmt::Debug;
 use core::{ascii::Char, mem::TransmuteFrom};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 #[repr(C, packed)]
+// should add ending reserved fields
 pub struct PartionTableHeader {
     pub signature: Signature,
     gpt_revison: u32,
@@ -114,6 +116,26 @@ impl PartionTableHeader {
         let hash = crc32fast::hash(bytes);
 
         checksum == hash
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+// should add ending reserved fields
+pub struct PartitionEntry {
+    partion_type_guid: u128,
+    unique_partion_guid: u128,
+    starting_lba: u64,
+    ending_lba: u64,
+    attributes: u64,
+    pub partion_name: [c_char; 72],
+}
+
+impl PartitionEntry {
+    pub fn name(&self) -> &'static str {
+        let ptr = self.partion_name.as_ptr();
+        let cstr = unsafe { CStr::from_ptr(ptr) };
+        cstr.to_str().unwrap()
     }
 }
 
