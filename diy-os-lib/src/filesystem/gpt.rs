@@ -1,12 +1,13 @@
 // reference docs at https://web.archive.org/web/20250610025442/https://uefi.org/specs/UEFI/2.10/05_GUID_Partition_Table_Format.html
 // and https://web.archive.org/web/20250630111613/https://wiki.osdev.org/GPT#Layout and https://web.archive.org/web/20250306133759/http://wiki.osdev.org/Partition_Table
 // wayback machine links incase any content changes or disappears
-use core::ffi::{CStr, c_char};
 use core::fmt::Debug;
 use core::hint::assert_unchecked;
 use core::mem::Assume;
 use core::str::FromStr;
 use core::{ascii::Char, mem::TransmuteFrom};
+
+use alloc::string::String;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -331,19 +332,21 @@ impl FromStr for Guid {
 #[repr(C)]
 // should add ending reserved fields
 pub struct PartitionEntry {
-    partion_type_guid: u128,
-    unique_partion_guid: u128,
+    // option optimization should make this that any non defined variant is none
+    // to test theroy I will edit this freely as a int thru ptr
+    pub partion_type_guid: Option<FSGuid>,
+    pub unique_partion_guid: u128,
     starting_lba: u64,
     ending_lba: u64,
     attributes: u64,
-    pub partion_name: [c_char; 72],
+    /// uft 16
+    pub partion_name: [u16; 36],
 }
 
 impl PartitionEntry {
-    pub fn name(&self) -> &'static str {
-        let ptr = self.partion_name.as_ptr();
-        let cstr = unsafe { CStr::from_ptr(ptr) };
-        cstr.to_str().unwrap()
+    pub fn name(&self) -> Option<String> {
+        // assumes little endian hardware
+        String::from_utf16(&self.partion_name).ok()
     }
 }
 
