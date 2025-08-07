@@ -3,6 +3,9 @@
 // wayback machine links incase any content changes or disappears
 use core::ffi::{CStr, c_char};
 use core::fmt::Debug;
+use core::hint::assert_unchecked;
+use core::mem::Assume;
+use core::str::FromStr;
 use core::{ascii::Char, mem::TransmuteFrom};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -117,6 +120,210 @@ impl PartionTableHeader {
         let hash = crc32fast::hash(bytes);
 
         checksum == hash
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u128)]
+#[non_exhaustive]
+pub enum FSGuid {
+    SimpleFileSystem = 0x5346_5353_4653_061A_450C_11BF_4EBF_0E06,
+}
+
+#[derive(Debug)]
+#[repr(C, packed)]
+pub struct GuidNode(u32, u16);
+
+#[derive(Debug)]
+/// String must have exactly 36 characters
+// try to also implement the that all chars must be hex
+// and needing 4 -
+pub struct GuidStr<'a> {
+    string: &'a str,
+}
+
+impl<'a> const refine::Refined for GuidStr<'a> {
+    type Input = &'a str;
+
+    fn new(input: Self::Input) -> Self {
+        Self { string: input }
+    }
+
+    fn holds(input: &Self::Input) -> bool {
+        input.len() == 36
+    }
+}
+
+impl<'a> From<GuidStr<'a>> for &'a str {
+    fn from(value: GuidStr<'a>) -> Self {
+        value.string
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct Guid {
+    time_low: u32,
+    time_mid: u16,
+    time_high_and_version: u16,
+    clock_seq_high_and_reserved: u8,
+    clock_seq_low: u8,
+    node: GuidNode,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseGuidError {
+    #[error("Faild to find 4 - to split the string at")]
+    FailedToSplitStrings,
+    #[error("The time low part of str was too short")]
+    TimeLowTooShort,
+    #[error("The time mid part of str was too short")]
+    TimeMidTooShort,
+    #[error("The time high part of str was too short")]
+    TimeHighTooShort,
+    #[error("The Clock Seq of str was too short")]
+    ClockSeqTooShort,
+    #[error("The node part of str was too short")]
+    NodeTooShort,
+}
+
+impl Guid {
+    pub const fn from_u128(value: u128) -> Self {
+        unsafe { core::mem::transmute::<u128, Self>(value) }
+    }
+
+    fn from_guid_str(str: &GuidStr) -> Result<Self, ParseGuidError> {
+        let str = str.string;
+
+        // Safe since we know that guild string must have a len of 36
+        unsafe { assert_unchecked(str.len() == 36) };
+
+        // should add a check for number of - and hex instead of unwrapping
+
+        let mut substrings = str.split('-');
+        let time_low_str = substrings
+            .next()
+            .ok_or(ParseGuidError::FailedToSplitStrings)?;
+        // in the future test weather to see if std lib or my impl is faster
+        // from_ascii_radix is the stdlibs
+        // nvm there is 100 faster sin
+        // keeping mine cause i want to for now
+        let time_low = time_low_str
+            .bytes()
+            .array_chunks::<2>()
+            .map(|pair| u8::from_ascii_radix(&pair, 16).unwrap())
+            .rev()
+            .array_chunks::<4>()
+            .map(|four_bytes| unsafe { <u32 as TransmuteFrom<[u8; 4]>>::transmute(four_bytes) })
+            .next()
+            .ok_or(ParseGuidError::TimeLowTooShort)?;
+
+        let time_mid_str = substrings
+            .next()
+            .ok_or(ParseGuidError::FailedToSplitStrings)?;
+
+        let time_mid = time_mid_str
+            .bytes()
+            .array_chunks::<2>()
+            .map(|pair| u8::from_ascii_radix(&pair, 16).unwrap())
+            .rev()
+            .array_chunks::<2>()
+            .map(|two_bytes| unsafe { <u16 as TransmuteFrom<[u8; 2]>>::transmute(two_bytes) })
+            .next()
+            .ok_or(ParseGuidError::TimeMidTooShort)?;
+
+        let time_high_and_version_str = substrings
+            .next()
+            .ok_or(ParseGuidError::FailedToSplitStrings)?;
+
+        let time_high_and_version = time_high_and_version_str
+            .bytes()
+            .array_chunks::<2>()
+            .map(|pair| u8::from_ascii_radix(&pair, 16).unwrap())
+            .rev()
+            .array_chunks::<2>()
+            .map(|two_bytes| unsafe { <u16 as TransmuteFrom<[u8; 2]>>::transmute(two_bytes) })
+            .next()
+            .ok_or(ParseGuidError::TimeHighTooShort)?;
+
+        let clock_seq_high_and_low_str = substrings
+            .next()
+            .ok_or(ParseGuidError::FailedToSplitStrings)?;
+
+        let clock_seq_high_and_low = clock_seq_high_and_low_str
+            .bytes()
+            .array_chunks::<2>()
+            .map(|pair| u8::from_ascii_radix(&pair, 16).unwrap())
+            .array_chunks::<2>()
+            .next()
+            .ok_or(ParseGuidError::ClockSeqTooShort)?;
+
+        let node_str = substrings
+            .next()
+            .ok_or(ParseGuidError::FailedToSplitStrings)?;
+
+        let node = node_str
+            .bytes()
+            .array_chunks::<2>()
+            .map(|pair| u8::from_ascii_radix(&pair, 16).unwrap())
+            .array_chunks::<6>()
+            .map(|two_bytes| unsafe {
+                <GuidNode as TransmuteFrom<[u8; 6], { Assume::SAFETY }>>::transmute(two_bytes)
+            })
+            .next()
+            .ok_or(ParseGuidError::NodeTooShort)?;
+
+        Ok(Self {
+            time_low,
+            time_mid,
+            time_high_and_version,
+            clock_seq_high_and_reserved: clock_seq_high_and_low[0],
+            clock_seq_low: clock_seq_high_and_low[1],
+            node,
+        })
+    }
+}
+
+impl const From<Guid> for u128 {
+    fn from(value: Guid) -> Self {
+        unsafe { core::mem::transmute::<Guid, Self>(value) }
+    }
+}
+
+impl const From<u128> for Guid {
+    fn from(value: u128) -> Self {
+        Self::from_u128(value)
+    }
+}
+
+impl TryFrom<&str> for Guid {
+    type Error = ParseGuidError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
+impl FromStr for Guid {
+    type Err = ParseGuidError;
+
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        use refine::Refined;
+
+        // inline marco to make generics work, patch lib with this support
+        let guid_str = {
+            type Input<'a> = <GuidStr<'a> as Refined>::Input;
+            // add to lib cfg if input == to same time as input to marco to not
+            // gen the into
+            let value: Input = str;
+            if <GuidStr>::holds(&value) {
+                <GuidStr>::new(value)
+            } else {
+                panic!("predicate does not hold at run time");
+            }
+        };
+
+        Self::from_guid_str(&guid_str)
     }
 }
 
