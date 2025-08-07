@@ -77,12 +77,22 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let frequency = refine_const!(1000u32, PitFrequency);
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
+    info!("start_address {:X}", 0x0000_0000_0804_aff8);
+    info!("start_address {:X}", 0x0000_0000_0804_aff8 + 4000 * 3);
+    info!("allocater start {:?}", diy_os::allocator::HEAP_START);
+    info!("allocater end {:?}", unsafe {
+        diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
+    });
+
     if let Some(addr) = boot_info.ramdisk_addr.into_option() {
+        info!("ramdisk start {addr:X}");
+        info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
+
         let ptr = core::ptr::without_provenance::<MBR>(usize::try_from(addr).unwrap());
 
         let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
         let header = unsafe { header_ptr.read() };
-        println!("is valid header?: {:#?}", header.validate(addr));
+        assert!(header.validate(addr));
 
         assert!(128 == header.size_of_partion_entry);
         let partion_lba = header.partion_entry_lba;
