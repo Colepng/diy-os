@@ -1,0 +1,12 @@
+[package]
+name = "primitive_memmapped_fat32_read_only_driver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+diy-os = { path = "../..//diy-os-lib" }
+anyhow = { version = "1.0.94", default-features = false }
+
+[lib]
+test = false
+bench = false
