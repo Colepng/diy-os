@@ -1,8 +1,10 @@
 use alloc::vec::Vec;
 use core::mem::{Assume, TransmuteFrom};
 
+use spinlock::Spinlock as Mutex;
+
 use crate::{
-    multitasking::{mutex::Mutex, sleep},
+    multitasking::sleep,
     timer::{Duration, Miliseconds, TIME_KEEPER},
 };
 

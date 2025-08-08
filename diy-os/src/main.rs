@@ -30,9 +30,8 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::ustar,
-    hlt_loop,
-    human_input_devices::{process_keys, STDIN},
+    RamdiskInfo, hlt_loop,
+    human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
     pit::PitFrequency,
@@ -40,13 +39,14 @@ use diy_os::{
     ps2::devices::ps2_device_1_task,
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
-use log::{Level, debug, trace};
+use log::{Level, info, trace};
 use refine::Refined;
 use refine::refine_const;
 use x86_64::{
     VirtAddr,
     structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
 };
+
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
@@ -72,11 +72,24 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let frequency = refine_const!(1000u32, PitFrequency);
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
-    let _ramdisk = if let Some(addr) = boot_info.ramdisk_addr.into_option() {
-        Some(unsafe { ustar::Ustar::new(addr.try_into()?) })
-    } else {
-        None
-    };
+    info!("start_address {:X}", 0x0000_0000_0804_aff8);
+    info!("start_address {:X}", 0x0000_0000_0804_aff8 + 4000 * 3);
+    info!("allocater start {:?}", diy_os::allocator::HEAP_START);
+    info!("allocater end {:?}", unsafe {
+        diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
+    });
+
+    if let Some(addr) = boot_info.ramdisk_addr.into_option() {
+        info!("ramdisk start {addr:X}");
+        info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
+
+        let ramdisk_info = RamdiskInfo {
+            addr,
+            len: boot_info.ramdisk_len,
+        };
+
+        diy_os::RAMDISK_INFO.with_mut_ref(|info| info.replace(ramdisk_info));
+    }
 
     println!("Hello, world!");
 
@@ -135,7 +148,7 @@ fn setup_tasks(
 
     loop {
         sleep(Seconds(1).into());
-        debug!("Main task is still running properly");
+        // debug!("Main task is still running properly");
     }
 }
 

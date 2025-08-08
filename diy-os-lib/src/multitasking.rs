@@ -11,12 +11,16 @@ use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 use x86_64::{registers::control::Cr3, structures::paging::PhysFrame};
 
-pub mod mutex;
+// pub mod mutex;
+pub mod mutex {
+    pub type Mutex<T> = spinlock::Spinlock<T>;
+}
 
 // TEMP, this is not checked big UB!
 // Setup some way to track used pages
 static STACK_COUNTER: Spinlock<u64> = Spinlock::new(0);
-const START_ADDR: VirtAddr = VirtAddr::new(0x0000_0000_0804_aff8);
+// const START_ADDR: VirtAddr = VirtAddr::new(0x0000_0000_0804_aff8);
+const START_ADDR: VirtAddr = VirtAddr::new(0x3000_0000_0000);
 
 pub static SCHEDULER: Spinlock<Scheduler> = Spinlock::new(Scheduler::new());
 
@@ -408,6 +412,7 @@ pub unsafe fn schedule() {
 ///
 /// Scheduler and time keeper must not be held.
 pub unsafe fn block_task(reason: BlockedReason) {
+    // log::trace!("blocking");
     without_interrupts(|| {
         let elapsed = get_time_elapsed();
 
@@ -448,6 +453,8 @@ pub unsafe fn block_task(reason: BlockedReason) {
             }
         });
     });
+
+    // log::trace!("unblocking");
 }
 
 #[derive(thiserror::Error, Debug)]

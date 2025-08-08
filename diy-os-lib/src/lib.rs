@@ -18,6 +18,8 @@
 #![feature(box_as_ptr)]
 #![feature(const_trait_impl)]
 #![feature(const_from)]
+#![feature(iter_array_chunks)]
+#![feature(int_from_ascii)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -53,6 +55,8 @@ use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
 
+use crate::multitasking::mutex::Mutex;
+
 extern crate alloc;
 
 #[cfg(not(test))]
@@ -76,6 +80,14 @@ pub mod syscalls;
 pub mod timer;
 pub mod usermode;
 pub mod volatile;
+
+#[derive(Debug, Clone, Copy)]
+pub struct RamdiskInfo {
+    pub addr: u64,
+    pub len: u64,
+}
+
+pub static RAMDISK_INFO: Mutex<Option<RamdiskInfo>> = Mutex::new(None);
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {

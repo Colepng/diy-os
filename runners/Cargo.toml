@@ -7,7 +7,7 @@ edition = "2024"
 ovmf-prebuilt = "0.1.0-alpha.1"
 
 [build-dependencies]
-diy-os = { path = "../diy-os", artifact = "bin", target = "x86_64-unknown-none" }
+kernel = { path = "../diy-os", artifact = "bin", target = "x86_64-unknown-none" }
 bootloader = { version = "0.11.10", default-features = false, features = ["uefi"] }
 
 [[bin]]
@@ -20,4 +20,4 @@ path = "src/qemu-uefi.rs"
 test = false
 
 [features]
-debug = ["diy-os/debug"]
+debug = ["kernel/debug"]

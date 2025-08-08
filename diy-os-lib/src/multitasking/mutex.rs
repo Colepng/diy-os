@@ -7,7 +7,7 @@ use core::{
 
 use crate::multitasking::schedule;
 
-pub struct Mutex<T> {
+struct Mutex<T> {
     locked: AtomicBool,
     data: UnsafeCell<T>,
 }

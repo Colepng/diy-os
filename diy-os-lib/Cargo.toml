@@ -1,26 +1,32 @@
 cargo-features = ["per-package-target"]
 
 [package]
-name = "kernel"
+name = "diy-os"
 version = "0.1.0"
 edition = "2024"
 default-target = "x86_64-unknown-none"
 
 [dependencies]
 bootloader_api = "0.11.7"
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+linked_list_allocator = "0.10.5"
+pic8259 = "0.11.0"
+uart_16550 = "0.3.0"
+volatile = "0.6.1"
 x86_64 = "0.15.2"
+noto-sans-mono-bitmap = "0.3.0"
 thiserror = { version = "2.0", default-features = false }
 anyhow = { version = "1.0.94", default-features = false }
+diy-os-macros = { path="../diy-os-macros/" }
 spinlock = { version = "0.1.0", path = "../spinlock" }
 log = "0.4.27"
 kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 refine = { git = "https://github.com/Colepng/Refinement-types" }
-diy-os = { path = "../diy-os-lib" }
+crc32fast = { version = "1.5.0", default-features = false }
 
-[[bin]]
-name = "kernel"
+[lib]
 test = false
 bench = false
 
 [features]
-debug = ["diy-os/debug"]
+debug = []
