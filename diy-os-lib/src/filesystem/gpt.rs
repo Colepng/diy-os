@@ -129,6 +129,7 @@ impl PartionTableHeader {
 #[non_exhaustive]
 pub enum FSGuid {
     SimpleFileSystem = 0x5346_5353_4653_061A_450C_11BF_4EBF_0E06,
+    FAT32 = 0xC799_26B7_B668_C087_4433_B9E5_EBD0_A0A2,
 }
 
 #[derive(Debug)]
@@ -328,18 +329,31 @@ impl FromStr for Guid {
     }
 }
 
+impl TryFrom<u128> for FSGuid {
+    type Error = &'static str;
+
+    fn try_from(value: u128) -> Result<Self, Self::Error> {
+        match value {
+            val if val == Self::SimpleFileSystem as u128 => Ok(Self::SimpleFileSystem),
+            val if val == Self::FAT32 as u128 => Ok(Self::FAT32),
+            _ => Err("Can't find filesystem with that guid"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 // should add ending reserved fields
 pub struct PartitionEntry {
     // option optimization should make this that any non defined variant is none
     // to test theroy I will edit this freely as a int thru ptr
-    pub partion_type_guid: Option<FSGuid>,
+    pub partion_type_guid: u128,
     pub unique_partion_guid: u128,
-    starting_lba: u64,
-    ending_lba: u64,
-    attributes: u64,
+    pub starting_lba: u64,
+    pub ending_lba: u64,
+    pub attributes: u64,
     /// uft 16
+    /// TODO: don't hardcode length some implementations have it go beyond 36
     pub partion_name: [u16; 36],
 }
 
@@ -347,6 +361,16 @@ impl PartitionEntry {
     pub fn name(&self) -> Option<String> {
         // assumes little endian hardware
         String::from_utf16(&self.partion_name).ok()
+    }
+
+    /// Returns the get fs of this [`PartitionEntry`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the `partion_type_guid` field
+    /// does not contain a known file system
+    pub fn get_fs(&self) -> Result<FSGuid, &'static str> {
+        FSGuid::try_from(self.partion_type_guid)
     }
 }
 

@@ -30,8 +30,7 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    filesystem::gpt::{PartionTableHeader, PartitionEntry},
-    hlt_loop,
+    RamdiskInfo, hlt_loop,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
@@ -41,6 +40,7 @@ use diy_os::{
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use log::{Level, info, trace};
+use primitive_memmapped_fat32_read_only_driver::wrapper;
 use qemu_exit::QEMUExit;
 use refine::Refined;
 use refine::refine_const;
@@ -71,8 +71,6 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
-    use diy_os::filesystem::gpt::mbr::MBR;
-
     let frequency = refine_const!(1000u32, PitFrequency);
     let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
@@ -87,29 +85,12 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
         info!("ramdisk start {addr:X}");
         info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
 
-        let ptr = core::ptr::without_provenance::<MBR>(usize::try_from(addr).unwrap());
+        let ramdisk_info = RamdiskInfo {
+            addr,
+            len: boot_info.ramdisk_len,
+        };
 
-        let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
-        let header = unsafe { header_ptr.read() };
-        assert!(header.validate(addr));
-
-        assert!(128 == header.size_of_partion_entry);
-        let partion_lba = header.partion_entry_lba;
-        let partion_ptr = core::ptr::without_provenance::<PartitionEntry>(usize::try_from(
-            addr + (partion_lba * 512),
-        )?);
-
-        let slice =
-            core::ptr::slice_from_raw_parts(partion_ptr, usize::try_from(header.num_of_partions)?);
-        let slice = unsafe { slice.as_ref().unwrap() };
-
-        let partion = slice[0];
-        let name = partion.name().unwrap();
-
-        println!("partion {name}");
-
-        let fs = partion.partion_type_guid;
-        println!("fs {fs:?}");
+        diy_os::RAMDISK_INFO.with_mut_ref(|info| info.replace(ramdisk_info));
     }
 
     println!("Hello, world!");
@@ -159,10 +140,18 @@ fn setup_tasks(
         frame_allocator,
     );
 
+    let fat32_driver = Task::new(
+        String::from("fat32 driver"),
+        wrapper,
+        mapper,
+        frame_allocator,
+    );
+
     let (_ps2_task, _keys_task, _shell_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
+        let _ = scheduler.spawn_task(fat32_driver);
 
         (ps2_task, keys_task, shell_task)
     });
