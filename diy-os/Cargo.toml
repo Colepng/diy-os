@@ -17,6 +17,7 @@ kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 refine = { git = "https://github.com/Colepng/Refinement-types" }
 crc32fast = { version = "1.5.0", default-features = false }
 diy-os = { path = "../diy-os-lib" }
+primitive_memmapped_fat32_read_only_driver = { path = "../drivers/primitive_memmapped_fat32_read_only_driver/" }
 
 [[bin]]
 name = "kernel"
