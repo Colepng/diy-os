@@ -27,7 +27,7 @@ impl Color {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    fn scale(&mut self, intensity: u8) {
+    const fn scale(&mut self, intensity: u8) {
         if intensity == 0 {
             self.red = 0;
             self.green = 0;

@@ -7,7 +7,7 @@
 #![feature(iter_collect_into)]
 #![feature(sync_unsafe_cell)]
 #![feature(const_trait_impl)]
-#![feature(const_from)]
+#![feature(const_convert)]
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 #![warn(clippy::pedantic, clippy::nursery, clippy::perf, clippy::style)]

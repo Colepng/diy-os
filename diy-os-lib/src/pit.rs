@@ -225,21 +225,21 @@ impl<'a> ReadBackCommandBuilder {
     }
 
     /// If set will read from channel 0 and any other channels selected
-    pub fn set_read_from_channel_0(&'a mut self, value: bool) -> &'a mut Self {
+    pub const fn set_read_from_channel_0(&'a mut self, value: bool) -> &'a mut Self {
         self.0 &= u8::from(value) << 1;
 
         self
     }
 
     /// If set will read from channel 1 and any other channels selected
-    pub fn set_read_from_channel_1(&'a mut self, value: bool) -> &'a mut Self {
+    pub const fn set_read_from_channel_1(&'a mut self, value: bool) -> &'a mut Self {
         self.0 |= u8::from(value) << 2;
 
         self
     }
 
     /// If set will read from channel 2 and any other channels selected
-    pub fn set_read_from_channel_2(&'a mut self, value: bool) -> &'a mut Self {
+    pub const fn set_read_from_channel_2(&'a mut self, value: bool) -> &'a mut Self {
         self.0 |= u8::from(value) << 3;
 
         self
@@ -248,14 +248,14 @@ impl<'a> ReadBackCommandBuilder {
     /// If set then the selected channels will their current count copied into their latch
     /// register. This is similar to [`LatchCountValueCommand`] except it works for multiple
     /// channels with one command.
-    pub fn set_read_latch_status(&'a mut self, value: bool) -> &'a mut Self {
+    pub const fn set_read_latch_status(&'a mut self, value: bool) -> &'a mut Self {
         self.0 |= u8::from(!value) << 4;
 
         self
     }
 
     /// If set then the next read on the selected channels will return a [`ReadBackStatusByte`]
-    pub fn set_read_status_byte(&'a mut self, value: bool) -> &'a mut Self {
+    pub const fn set_read_status_byte(&'a mut self, value: bool) -> &'a mut Self {
         self.0 |= u8::from(!value) << 5;
 
         self

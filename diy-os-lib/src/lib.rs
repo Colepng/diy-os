@@ -17,7 +17,7 @@
 #![feature(sync_unsafe_cell)]
 #![feature(box_as_ptr)]
 #![feature(const_trait_impl)]
-#![feature(const_from)]
+#![feature(const_convert)]
 #![feature(iter_array_chunks)]
 #![feature(int_from_ascii)]
 #![warn(

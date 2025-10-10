@@ -12,7 +12,7 @@ impl Ustar {
     ///
     /// # Safety
     /// Caller must make that the addr is valid
-    pub unsafe fn new(addr: usize) -> Self {
+    pub const unsafe fn new(addr: usize) -> Self {
         Self {
             ptr: core::ptr::with_exposed_provenance_mut::<MetaData>(addr),
         }
