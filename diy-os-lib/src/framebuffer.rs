@@ -32,7 +32,7 @@ pub struct FrameBuffer {
     memio: VolatileMutRef<'static, [u8]>, // the underlying memory mapped IO
     x: usize,                             // Current pixel in the x axis
     y: usize,                             // Current pixel in the y axis
-    write_pixel_fn: fn(&mut FrameBuffer, usize, Color), // Function pointer to the function that
+    write_pixel_fn: fn(&mut Self, usize, Color), // Function pointer to the function that
                                           // writes the appropriate pixel format
 }
 

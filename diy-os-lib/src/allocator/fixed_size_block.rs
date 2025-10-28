@@ -21,7 +21,7 @@ fn list_index(layout: &Layout) -> Option<usize> {
 }
 
 struct ListNode {
-    next: Option<&'static mut ListNode>,
+    next: Option<&'static mut Self>,
 }
 
 pub struct FixedSizeBlockAllocator {

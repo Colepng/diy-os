@@ -57,5 +57,5 @@ impl<T> LinkedList<T> {
 
 struct Node<T> {
     value: T,
-    next: Option<Box<Node<T>>>,
+    next: Option<Box<Self>>,
 }
