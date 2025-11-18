@@ -51,7 +51,7 @@ lazy_static! {
             idt[InterruptIndex::Suprious.as_u8()].set_handler_fn(spurious_handler);
             idt[0x80]
                 .set_handler_addr(VirtAddr::new(
-                    (syscalls::system_call_handler_wrapper as usize)
+                    (syscalls::system_call_handler_wrapper as *const () as usize)
                         .try_into()
                         .unwrap(),
                 ))
