@@ -56,7 +56,7 @@ jobs:
           rustup toolchain install nightly --component rust-src
           rustup override set nightly
     - name: Run diy-os tests
-      working-directory: ./diy-os
+      working-directory: ./diy-os-lib
       run: cargo test --lib --target=x86_64-unknown-linux-gnu
     - name: Run workspace tests
       working-directory: .
@@ -73,7 +73,7 @@ jobs:
           rustup override set nightly
           cargo miri setup
     - name: Run miri on diy-os
-      working-directory: ./diy-os
+      working-directory: ./diy-os-lib
       run: MIRIFLAGS=-Zmiri-disable-isolation cargo miri test --target=x86_64-unknown-linux-gnu --lib
     - name: Run miri on workspace
       working-directory: .
