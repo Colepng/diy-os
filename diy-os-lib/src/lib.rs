@@ -20,6 +20,7 @@
 #![feature(const_convert)]
 #![feature(iter_array_chunks)]
 #![feature(int_from_ascii)]
+#![feature(test)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,

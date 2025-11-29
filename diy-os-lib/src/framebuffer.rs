@@ -168,13 +168,24 @@ impl Write for FrameBuffer {
 
 #[cfg(test)]
 mod tests {
+    use core::{alloc::Layout, slice};
+    use std::alloc::{alloc, dealloc};
+
     use bootloader_api::info::PixelFormat;
 
     use super::{Assume, Color, FrameBuffer, FrameBufferInfo, TransmuteFrom};
-    use crate::console::graphics::GraphicBackend;
+    use crate::console::graphics::{GraphicBackend, Pixels, TextDrawer};
+
+    extern crate test;
+
+    use test::bench::Bencher;
 
     fn init(format: PixelFormat) -> FrameBuffer {
-        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
+        let mut buffer = unsafe {
+            let layout = Layout::new::<[u32; 100 * 100]>();
+            let ptr = alloc(layout);
+            slice::from_raw_parts_mut(ptr.cast::<u8>(), 4 * 100 * 100)
+        };
 
         let info = FrameBufferInfo {
             byte_len: 4 * 100 * 100,
@@ -185,7 +196,7 @@ mod tests {
             stride: 100,
         };
 
-        let mem = unsafe { &mut *&raw mut BUFFER };
+        let mem = unsafe { &mut *&raw mut buffer};
         let bytes_fn = match format {
             PixelFormat::Rgb => |_, color: Color| (color.red, color.green, color.blue, 0),
             PixelFormat::Bgr => |_, color: Color| (color.blue, color.green, color.red, 0),
@@ -221,58 +232,174 @@ mod tests {
         framebuffer.clear();
         framebuffer
     }
+    
+    fn cleanup(mut fb: FrameBuffer) {
+        let ptr = fb.memio.as_mut_ptr().as_raw_ptr().as_ptr().to_raw_parts().0.cast::<u8>();
 
-    #[test]
-    fn plotting_bgr_test() {
+        let layout = Layout::new::<[u32; 100 * 100]>();
+        unsafe {
+            dealloc(ptr, layout);
+        };
+    }
+
+    #[bench]
+    fn plotting_bgr_test(b: &mut Bencher) {
         let mut fb = init(PixelFormat::Bgr);
-
-        let color = crate::console::graphics::Color {
-            red: 255,
-            green: 255,
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
             blue: 100,
         };
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+            assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+            assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+        });
+
+        cleanup(fb);
     }
-    #[test]
-    fn plotting_rgb_test() {
+
+    #[bench]
+    fn plotting_rgb_test(b: &mut Bencher) {
         let mut fb = init(PixelFormat::Rgb);
-
-        let color = crate::console::graphics::Color {
-            red: 255,
-            green: 255,
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
             blue: 100,
         };
 
-        fb.plot_pixel(0, 0, color);
+            fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.as_ptr().index(0).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(2).read(), 100);
+            assert_eq!(fb.memio.as_ptr().index(2).read(), 100);
+            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+            assert_eq!(fb.memio.as_ptr().index(0).read(), 255);
+        });
+
+        cleanup(fb);
     }
 
-    #[test]
-    fn plotting_unknown_test() {
+    #[bench]
+    fn plotting_unknown_test(b: &mut Bencher) {
         let mut fb = init(PixelFormat::Unknown {
             red_position: 16,
             green_position: 8,
             blue_position: 0,
         });
 
-        let color = crate::console::graphics::Color {
-            red: 255,
-            green: 255,
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
             blue: 100,
         };
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+            assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+            assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+        });
+
+        cleanup(fb);
+    }
+
+    #[bench]
+    fn fill_brg(b: &mut Bencher) {
+        let mut fb = init(PixelFormat::Bgr);
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
+                blue: 100,
+            };
+
+            fb.fill(color);
+
+            fb.memio
+                .as_ptr()
+                .iter()
+                .step_by(4)
+                .for_each(|x| assert_eq!(x.read(), 100));
+        });
+
+        cleanup(fb);
+    }
+
+    #[bench]
+    fn fill_rgb(b: &mut Bencher) {
+        let mut fb = init(PixelFormat::Rgb);
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
+                blue: 100,
+            };
+
+            fb.fill(color);
+
+            fb.memio
+                .as_ptr()
+                .iter()
+                .step_by(4)
+                .for_each(|x| assert_eq!(x.read(), 255));
+        });
+
+        cleanup(fb);
+    }
+
+    #[bench]
+    fn fill_unknown(b: &mut Bencher) {
+        let mut fb = init(PixelFormat::Unknown {
+            red_position: 16,
+            green_position: 8,
+            blue_position: 0,
+        });
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
+                blue: 100,
+            };
+
+            fb.fill(color);
+
+            fb.memio
+                .as_ptr()
+                .iter()
+                .step_by(4)
+                .for_each(|x| assert_eq!(x.read(), 100));
+        });
+
+        cleanup(fb);
+    }
+
+    #[bench]
+    #[cfg(not(miri))]
+    fn scroll(b: &mut Bencher) {
+        let mut fb = init(PixelFormat::Unknown {
+            red_position: 16,
+            green_position: 8,
+            blue_position: 0,
+        });
+        b.iter(|| {
+            let color = crate::console::graphics::Color {
+                red: 255,
+                green: 255,
+                blue: 100,
+            };
+
+            fb.scroll(Pixels(fb.info.height));
+
+            fb.memio
+                .as_ptr()
+                .iter()
+                .for_each(|x| assert_eq!(x.read(), 0));
+        });
+
+        cleanup(fb);
     }
 }
