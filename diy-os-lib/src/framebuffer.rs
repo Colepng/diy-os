@@ -1,15 +1,13 @@
-use crate::{
-    console::{
-        font::SIZE,
-        graphics::{GraphicBackend, Pixels, TextDrawer},
-    },
-    volatile::VolatileMutRef,
+use crate::console::{
+    font::SIZE,
+    graphics::{GraphicBackend, Pixels, TextDrawer},
 };
 use core::{
     fmt::Write,
     mem::{Assume, TransmuteFrom},
-    slice,
 };
+
+use volatile::VolatileRef;
 
 use spinlock::Spinlock;
 
@@ -22,69 +20,72 @@ pub static FRAME_BUFER: Spinlock<Option<FrameBuffer>> = Spinlock::new(None);
 pub fn init(framebuffer_bootinfo: bootloader_api::info::FrameBuffer) {
     let info = framebuffer_bootinfo.info();
     let mem = framebuffer_bootinfo.into_buffer();
-    let mut framebuffer = FrameBuffer::new(info, mem);
+    let bytes_fn = match info.pixel_format {
+        PixelFormat::Rgb => |_, color: Color| (color.red, color.green, color.blue, 0),
+        PixelFormat::Bgr => |_, color: Color| (color.blue, color.green, color.red, 0),
+        PixelFormat::U8 => todo!(),
+        PixelFormat::Unknown {
+            red_position: _,
+            green_position: _,
+            blue_position: _,
+        } => |pixel_format, color: Color| {
+            if let PixelFormat::Unknown {
+                red_position,
+                green_position,
+                blue_position,
+            } = pixel_format
+            {
+                let color_u32 = (u32::from(color.red) << red_position)
+                    | (u32::from(color.blue) << blue_position)
+                    | (u32::from(color.green) << green_position);
+
+                unsafe {
+                    <(u8, u8, u8, u8) as TransmuteFrom<u32, { Assume::NOTHING }>>::transmute(
+                        color_u32,
+                    )
+                }
+            } else {
+                unreachable!()
+            }
+        },
+        _ => todo!(),
+    };
+    let mut framebuffer = FrameBuffer::new(info, mem, bytes_fn);
+
     framebuffer.clear();
     FRAME_BUFER.acquire().replace(framebuffer);
 }
 
 pub struct FrameBuffer {
-    info: FrameBufferInfo,                // Info about the frame buffer
-    memio: VolatileMutRef<'static, [u8]>, // the underlying memory mapped IO
-    x: usize,                             // Current pixel in the x axis
-    y: usize,                             // Current pixel in the y axis
-    write_pixel_fn: fn(&mut Self, usize, Color), // Function pointer to the function that
-                                          // writes the appropriate pixel format
+    info: FrameBufferInfo,             // Info about the frame buffer
+    memio: VolatileRef<'static, [u8]>, // the underlying memory mapped IO
+    x: usize,                          // Current pixel in the x axis
+    y: usize,                          // Current pixel in the y axis
+    bytes_fn: fn(PixelFormat, Color) -> (u8, u8, u8, u8), // Converts the colors to 4 u8s
 }
 
 impl FrameBuffer {
-    pub fn new(info: FrameBufferInfo, memio: &'static mut [u8]) -> Self {
+    pub fn new(
+        info: FrameBufferInfo,
+        memio: &'static mut [u8],
+        bytes_fn: fn(PixelFormat, Color) -> (u8, u8, u8, u8),
+    ) -> Self {
         Self {
             info,
-            memio: unsafe { VolatileMutRef::new(memio.into()) },
+            memio: unsafe { VolatileRef::new(memio.into()) },
             x: 0,
             y: 0,
-            write_pixel_fn: match info.pixel_format {
-                PixelFormat::Bgr => Self::write_bgr_pixel,
-                PixelFormat::Rgb => Self::write_rgb_pixel,
-                PixelFormat::Unknown { .. } => Self::write_unknown_4byte_pixel,
-                _ => todo!(),
-            },
+            bytes_fn,
         }
     }
 
-    fn write_bgr_pixel(&mut self, byte_offset: usize, color: Color) {
-        self.memio.index_mut(byte_offset, color.blue);
-        self.memio.index_mut(byte_offset + 1, color.green);
-        self.memio.index_mut(byte_offset + 2, color.red);
-    }
-
-    fn write_rgb_pixel(&mut self, byte_offset: usize, color: Color) {
-        self.memio.index_mut(byte_offset, color.red);
-        self.memio.index_mut(byte_offset + 1, color.green);
-        self.memio.index_mut(byte_offset + 2, color.blue);
-    }
-
-    #[allow(clippy::similar_names)]
-    fn write_unknown_4byte_pixel(&mut self, byte_offset: usize, color: Color) {
-        if let PixelFormat::Unknown {
-            red_position,
-            green_position,
-            blue_position,
-        } = self.info.pixel_format
-        {
-            let color_u32 = (u32::from(color.red) << red_position)
-                | (u32::from(color.blue) << blue_position)
-                | (u32::from(color.green) << green_position);
-
-            let color_u8s = unsafe {
-                <[u8; 4] as TransmuteFrom<u32, { Assume::NOTHING }>>::transmute(color_u32)
-            };
-
-            self.memio.index_mut(byte_offset, color_u8s[0]);
-            self.memio.index_mut(byte_offset + 1, color_u8s[1]);
-            self.memio.index_mut(byte_offset + 2, color_u8s[2]);
-            self.memio.index_mut(byte_offset + 3, color_u8s[3]);
-        }
+    fn write_pixel(&mut self, byte_offset: usize, color: Color) {
+        let bytes = (self.bytes_fn)(self.info.pixel_format, color);
+        let ptr = self.memio.as_mut_ptr();
+        ptr.index(byte_offset).write(bytes.0);
+        ptr.index(byte_offset + 1).write(bytes.1);
+        ptr.index(byte_offset + 2).write(bytes.2);
+        ptr.index(byte_offset + 3).write(bytes.3);
     }
 }
 
@@ -92,7 +93,7 @@ impl GraphicBackend for FrameBuffer {
     fn plot_pixel(&mut self, x: usize, y: usize, color: Color) {
         let byte_offset = self.info.bytes_per_pixel * (y * self.info.stride + x);
 
-        (self.write_pixel_fn)(self, byte_offset, color);
+        self.write_pixel(byte_offset, color);
     }
 
     // TODO: Write an effient implemation that does not recalc
@@ -143,28 +144,17 @@ impl TextDrawer for FrameBuffer {
     fn scroll(&mut self, amount: Pixels) {
         let number_of_bytes_to_scroll = self.info.bytes_per_pixel * self.info.stride * amount.0;
 
-        let memio_ptr = self.memio.as_ptr().as_mut_ptr();
+        let memio_ptr = self.memio.as_mut_ptr();
 
         // shifts up everything but the last amount of pixels
-        unsafe {
-            core::ptr::copy(
-                memio_ptr.byte_add(number_of_bytes_to_scroll),
-                memio_ptr,
-                self.info.byte_len - number_of_bytes_to_scroll,
-            );
-        }
+        memio_ptr.copy_within(number_of_bytes_to_scroll..self.info.byte_len, 0);
 
         // sets each pixel to black to clear the old pixels
-        let slice = unsafe {
-            slice::from_raw_parts_mut(self.memio.as_ptr().as_mut_ptr(), self.memio.len())
-        };
-
-        slice
-            .iter_mut()
-            .rev()
-            .take(number_of_bytes_to_scroll)
+        memio_ptr
+            .iter()
+            .skip(self.info.byte_len - number_of_bytes_to_scroll)
             .for_each(|byte| {
-                *byte = 0;
+                byte.write(0);
             });
     }
 }
@@ -178,25 +168,63 @@ impl Write for FrameBuffer {
 
 #[cfg(test)]
 mod tests {
-    use super::FrameBuffer;
-    use crate::{console::graphics::GraphicBackend, framebuffer::FrameBufferInfo};
+    use bootloader_api::info::PixelFormat;
+
+    use super::{Assume, Color, FrameBuffer, FrameBufferInfo, TransmuteFrom};
+    use crate::console::graphics::GraphicBackend;
+
+    fn init(format: PixelFormat) -> FrameBuffer {
+        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
+
+        let info = FrameBufferInfo {
+            byte_len: 4 * 100 * 100,
+            width: 100,
+            height: 100,
+            pixel_format: format,
+            bytes_per_pixel: 4,
+            stride: 100,
+        };
+
+        let mem = unsafe { &mut *&raw mut BUFFER };
+        let bytes_fn = match format {
+            PixelFormat::Rgb => |_, color: Color| (color.red, color.green, color.blue, 0),
+            PixelFormat::Bgr => |_, color: Color| (color.blue, color.green, color.red, 0),
+            PixelFormat::U8 => todo!(),
+            PixelFormat::Unknown {
+                red_position: _,
+                green_position: _,
+                blue_position: _,
+            } => |pixel_format, color: Color| {
+                if let PixelFormat::Unknown {
+                    red_position,
+                    green_position,
+                    blue_position,
+                } = pixel_format
+                {
+                    let color_u32 = (u32::from(color.red) << red_position)
+                        | (u32::from(color.blue) << blue_position)
+                        | (u32::from(color.green) << green_position);
+
+                    unsafe {
+                        <(u8, u8, u8, u8) as TransmuteFrom<u32, { Assume::NOTHING }>>::transmute(
+                            color_u32,
+                        )
+                    }
+                } else {
+                    unreachable!()
+                }
+            },
+            _ => todo!(),
+        };
+        let mut framebuffer = FrameBuffer::new(info, mem, bytes_fn);
+
+        framebuffer.clear();
+        framebuffer
+    }
 
     #[test]
     fn plotting_bgr_test() {
-        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
-
-        let info = FrameBufferInfo {
-            byte_len: 4 * 100 * 100,
-            width: 100,
-            height: 100,
-            pixel_format: bootloader_api::info::PixelFormat::Bgr,
-            bytes_per_pixel: 4,
-            stride: 100,
-        };
-
-        let memio = unsafe { &mut *&raw mut BUFFER };
-
-        let mut fb = FrameBuffer::new(info, memio);
+        let mut fb = init(PixelFormat::Bgr);
 
         let color = crate::console::graphics::Color {
             red: 255,
@@ -206,26 +234,13 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.index(2), 255);
-        assert_eq!(fb.memio.index(1), 255);
-        assert_eq!(fb.memio.index(0), 100);
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
     }
     #[test]
     fn plotting_rgb_test() {
-        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
-
-        let info = FrameBufferInfo {
-            byte_len: 4 * 100 * 100,
-            width: 100,
-            height: 100,
-            pixel_format: bootloader_api::info::PixelFormat::Rgb,
-            bytes_per_pixel: 4,
-            stride: 100,
-        };
-
-        let memio = unsafe { &mut *&raw mut BUFFER };
-
-        let mut fb = FrameBuffer::new(info, memio);
+        let mut fb = init(PixelFormat::Rgb);
 
         let color = crate::console::graphics::Color {
             red: 255,
@@ -235,31 +250,18 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.index(0), 255);
-        assert_eq!(fb.memio.index(1), 255);
-        assert_eq!(fb.memio.index(2), 100);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 100);
     }
 
     #[test]
     fn plotting_unknown_test() {
-        static mut BUFFER: [u8; 4 * 100 * 100] = [0; 4 * 100 * 100];
-
-        let info = FrameBufferInfo {
-            byte_len: 4 * 100 * 100,
-            width: 100,
-            height: 100,
-            pixel_format: bootloader_api::info::PixelFormat::Unknown {
-                red_position: 16,
-                green_position: 8,
-                blue_position: 0,
-            },
-            bytes_per_pixel: 4,
-            stride: 100,
-        };
-
-        let memio = unsafe { &mut *&raw mut BUFFER };
-
-        let mut fb = FrameBuffer::new(info, memio);
+        let mut fb = init(PixelFormat::Unknown {
+            red_position: 16,
+            green_position: 8,
+            blue_position: 0,
+        });
 
         let color = crate::console::graphics::Color {
             red: 255,
@@ -269,8 +271,8 @@ mod tests {
 
         fb.plot_pixel(0, 0, color);
 
-        assert_eq!(fb.memio.index(2), 255);
-        assert_eq!(fb.memio.index(1), 255);
-        assert_eq!(fb.memio.index(0), 100);
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
     }
 }

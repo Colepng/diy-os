@@ -79,7 +79,6 @@ pub mod serial;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;
-pub mod volatile;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RamdiskInfo {
