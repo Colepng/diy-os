@@ -30,7 +30,7 @@ use bootloader_api::{
 };
 use core::panic::PanicInfo;
 use diy_os::{
-    RamdiskInfo, hlt_loop,
+    RamdiskInfo,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
@@ -40,6 +40,7 @@ use diy_os::{
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use log::{Level, info, trace};
+use qemu_exit::QEMUExit;
 use refine::Refined;
 use refine::refine_const;
 use x86_64::{
@@ -221,6 +222,11 @@ fn kernal_shell() -> ! {
                                 println!("time_since_boot: {}", time_keeper.time_since_boot.time);
                             });
                         }
+                        "QUIT" | "EXIT" => {
+                            let exit_handle = qemu_exit::X86::new(0xf4, 3);
+
+                            exit_handle.exit_success();
+                        }
                         command => println!("{command} is invalid"),
                     }
                 }
@@ -278,5 +284,7 @@ fn panic(info: &PanicInfo) -> ! {
         sched.print_state();
     });
 
-    hlt_loop();
+    let exit_handle = qemu_exit::X86::new(0xf4, 3);
+
+    exit_handle.exit_failure();
 }

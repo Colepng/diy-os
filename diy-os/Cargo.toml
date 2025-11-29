@@ -16,6 +16,7 @@ log = "0.4.27"
 kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 refine = { git = "https://github.com/Colepng/Refinement-types" }
 diy-os = { path = "../diy-os-lib" }
+qemu-exit = "3.0.2"
 
 [[bin]]
 name = "kernel"
