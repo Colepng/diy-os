@@ -21,6 +21,7 @@
 #![feature(iter_array_chunks)]
 #![feature(int_from_ascii)]
 #![feature(test)]
+#![feature(pointer_is_aligned_to)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,

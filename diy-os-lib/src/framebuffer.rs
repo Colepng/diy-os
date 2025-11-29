@@ -5,6 +5,7 @@ use crate::console::{
 use core::{
     fmt::Write,
     mem::{Assume, TransmuteFrom},
+    slice,
 };
 
 use volatile::VolatileRef;
@@ -100,11 +101,19 @@ impl GraphicBackend for FrameBuffer {
     // https://wiki.osdev.org/Drawing_In_Protected_Mode
     // see optimization
     fn fill(&mut self, color: Color) {
-        for y in 0..self.info.height {
-            for x in 0..self.info.width {
-                self.plot_pixel(x, y, color);
-            }
-        }
+        let bytes = (self.bytes_fn)(self.info.pixel_format, color);
+
+        let raw_ptr = self.memio.as_mut_ptr().as_raw_ptr().to_raw_parts();
+        assert!( raw_ptr.0.is_aligned_to(4));
+
+        let slice =
+            unsafe { slice::from_raw_parts_mut(raw_ptr.0.as_ptr().cast::<u32>(), raw_ptr.1 / 4) };
+
+        let u32 = unsafe {
+            <u32 as TransmuteFrom<(u8, u8, u8, u8), { Assume::NOTHING }>>::transmute(bytes)
+        };
+
+        slice.fill(u32);
     }
 
     fn get_x(&self) -> usize {
@@ -144,17 +153,26 @@ impl TextDrawer for FrameBuffer {
     fn scroll(&mut self, amount: Pixels) {
         let number_of_bytes_to_scroll = self.info.bytes_per_pixel * self.info.stride * amount.0;
 
-        let memio_ptr = self.memio.as_mut_ptr();
+        let memio_ptr = self.memio.as_mut_ptr().as_raw_ptr().as_mut_ptr();
 
         // shifts up everything but the last amount of pixels
-        memio_ptr.copy_within(number_of_bytes_to_scroll..self.info.byte_len, 0);
+        unsafe {
+            core::ptr::copy(
+                memio_ptr.byte_add(number_of_bytes_to_scroll),
+                memio_ptr,
+                self.info.byte_len - number_of_bytes_to_scroll,
+            );
+        }
 
         // sets each pixel to black to clear the old pixels
-        memio_ptr
-            .iter()
-            .skip(self.info.byte_len - number_of_bytes_to_scroll)
+        let slice = unsafe { slice::from_raw_parts_mut(memio_ptr, self.info.byte_len) };
+
+        slice
+            .iter_mut()
+            .rev()
+            .take(number_of_bytes_to_scroll)
             .for_each(|byte| {
-                byte.write(0);
+                *byte = 0;
             });
     }
 }
@@ -249,10 +267,10 @@ mod tests {
             let color = crate::console::graphics::Color {
                 red: 255,
                 green: 255,
-            blue: 100,
-        };
+                blue: 100,
+            };
 
-        fb.plot_pixel(0, 0, color);
+            fb.plot_pixel(0, 0, color);
 
             assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
             assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
@@ -269,8 +287,8 @@ mod tests {
             let color = crate::console::graphics::Color {
                 red: 255,
                 green: 255,
-            blue: 100,
-        };
+                blue: 100,
+            };
 
             fb.plot_pixel(0, 0, color);
 
@@ -294,10 +312,10 @@ mod tests {
             let color = crate::console::graphics::Color {
                 red: 255,
                 green: 255,
-            blue: 100,
-        };
+                blue: 100,
+            };
 
-        fb.plot_pixel(0, 0, color);
+            fb.plot_pixel(0, 0, color);
 
             assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
             assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
@@ -378,7 +396,6 @@ mod tests {
     }
 
     #[bench]
-    #[cfg(not(miri))]
     fn scroll(b: &mut Bencher) {
         let mut fb = init(PixelFormat::Unknown {
             red_position: 16,
