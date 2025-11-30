@@ -2,10 +2,10 @@ use crate::console::{
     font::SIZE,
     graphics::{GraphicBackend, Pixels, TextDrawer},
 };
+use alloc::boxed::Box;
 use core::{
     fmt::Write,
     mem::{Assume, TransmuteFrom},
-    slice,
 };
 
 use volatile::VolatileRef;
@@ -60,9 +60,16 @@ pub fn init(framebuffer_bootinfo: bootloader_api::info::FrameBuffer) {
 pub struct FrameBuffer {
     info: FrameBufferInfo,             // Info about the frame buffer
     memio: VolatileRef<'static, [u8]>, // the underlying memory mapped IO
+    buffer: &'static mut [u8],         // Second Buffer
     x: usize,                          // Current pixel in the x axis
     y: usize,                          // Current pixel in the y axis
     bytes_fn: fn(PixelFormat, Color) -> (u8, u8, u8, u8), // Converts the colors to 4 u8s
+}
+
+impl Drop for FrameBuffer {
+    fn drop(&mut self) {
+        // unsafe { drop(Box::from_raw(self.buffer)) };
+    }
 }
 
 impl FrameBuffer {
@@ -74,6 +81,7 @@ impl FrameBuffer {
         Self {
             info,
             memio: unsafe { VolatileRef::new(memio.into()) },
+            buffer: unsafe { Box::<[_]>::leak(Box::new_zeroed_slice(memio.len()).assume_init()) },
             x: 0,
             y: 0,
             bytes_fn,
@@ -82,11 +90,28 @@ impl FrameBuffer {
 
     fn write_pixel(&mut self, byte_offset: usize, color: Color) {
         let bytes = (self.bytes_fn)(self.info.pixel_format, color);
-        let ptr = self.memio.as_mut_ptr();
-        ptr.index(byte_offset).write(bytes.0);
-        ptr.index(byte_offset + 1).write(bytes.1);
-        ptr.index(byte_offset + 2).write(bytes.2);
-        ptr.index(byte_offset + 3).write(bytes.3);
+        self.buffer[byte_offset] = bytes.0;
+        self.buffer[byte_offset + 1] = bytes.1;
+        self.buffer[byte_offset + 2] = bytes.2;
+        self.buffer[byte_offset + 3] = bytes.3;
+    }
+
+    #[cfg(miri)]
+    fn flip(&mut self) {
+        let dst_ptr = self.memio.as_mut_ptr().as_raw_ptr();
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.buffer.as_ptr(),
+                dst_ptr.as_ptr().as_mut_ptr(),
+                self.info.byte_len,
+            )
+        };
+    }
+
+    #[cfg(not(miri))]
+    fn flip(&mut self) {
+        self.memio.as_mut_ptr().copy_from_slice(self.buffer);
     }
 }
 
@@ -97,23 +122,17 @@ impl GraphicBackend for FrameBuffer {
         self.write_pixel(byte_offset, color);
     }
 
-    // TODO: Write an effient implemation that does not recalc
-    // https://wiki.osdev.org/Drawing_In_Protected_Mode
-    // see optimization
+    fn flip(&mut self) {
+        self.flip();
+    }
+
     fn fill(&mut self, color: Color) {
         let bytes = (self.bytes_fn)(self.info.pixel_format, color);
 
-        let raw_ptr = self.memio.as_mut_ptr().as_raw_ptr().to_raw_parts();
-        assert!( raw_ptr.0.is_aligned_to(4));
+        let chunks = self.buffer.as_chunks_mut::<4>();
+        assert!(chunks.1.is_empty());
 
-        let slice =
-            unsafe { slice::from_raw_parts_mut(raw_ptr.0.as_ptr().cast::<u32>(), raw_ptr.1 / 4) };
-
-        let u32 = unsafe {
-            <u32 as TransmuteFrom<(u8, u8, u8, u8), { Assume::NOTHING }>>::transmute(bytes)
-        };
-
-        slice.fill(u32);
+        chunks.0.fill(bytes.into());
     }
 
     fn get_x(&self) -> usize {
@@ -153,27 +172,10 @@ impl TextDrawer for FrameBuffer {
     fn scroll(&mut self, amount: Pixels) {
         let number_of_bytes_to_scroll = self.info.bytes_per_pixel * self.info.stride * amount.0;
 
-        let memio_ptr = self.memio.as_mut_ptr().as_raw_ptr().as_mut_ptr();
+        self.buffer
+            .copy_within(number_of_bytes_to_scroll..self.info.byte_len, 0);
 
-        // shifts up everything but the last amount of pixels
-        unsafe {
-            core::ptr::copy(
-                memio_ptr.byte_add(number_of_bytes_to_scroll),
-                memio_ptr,
-                self.info.byte_len - number_of_bytes_to_scroll,
-            );
-        }
-
-        // sets each pixel to black to clear the old pixels
-        let slice = unsafe { slice::from_raw_parts_mut(memio_ptr, self.info.byte_len) };
-
-        slice
-            .iter_mut()
-            .rev()
-            .take(number_of_bytes_to_scroll)
-            .for_each(|byte| {
-                *byte = 0;
-            });
+        self.buffer[self.info.byte_len - number_of_bytes_to_scroll..].fill(0);
     }
 }
 
@@ -186,7 +188,7 @@ impl Write for FrameBuffer {
 
 #[cfg(test)]
 mod tests {
-    use core::{alloc::Layout, slice};
+    use core::{alloc::Layout, mem::MaybeUninit, slice};
     use std::alloc::{alloc, dealloc};
 
     use bootloader_api::info::PixelFormat;
@@ -199,12 +201,6 @@ mod tests {
     use test::bench::Bencher;
 
     fn init(format: PixelFormat) -> FrameBuffer {
-        let mut buffer = unsafe {
-            let layout = Layout::new::<[u32; 100 * 100]>();
-            let ptr = alloc(layout);
-            slice::from_raw_parts_mut(ptr.cast::<u8>(), 4 * 100 * 100)
-        };
-
         let info = FrameBufferInfo {
             byte_len: 4 * 100 * 100,
             width: 100,
@@ -214,7 +210,7 @@ mod tests {
             stride: 100,
         };
 
-        let mem = unsafe { &mut *&raw mut buffer};
+        let mut mem = Box::leak(vec![0u8; 4 * 100 * 100].into_boxed_slice());
         let bytes_fn = match format {
             PixelFormat::Rgb => |_, color: Color| (color.red, color.green, color.blue, 0),
             PixelFormat::Bgr => |_, color: Color| (color.blue, color.green, color.red, 0),
@@ -250,15 +246,8 @@ mod tests {
         framebuffer.clear();
         framebuffer
     }
-    
-    fn cleanup(mut fb: FrameBuffer) {
-        let ptr = fb.memio.as_mut_ptr().as_raw_ptr().as_ptr().to_raw_parts().0.cast::<u8>();
 
-        let layout = Layout::new::<[u32; 100 * 100]>();
-        unsafe {
-            dealloc(ptr, layout);
-        };
-    }
+    fn cleanup(mut fb: FrameBuffer) {}
 
     #[bench]
     fn plotting_bgr_test(b: &mut Bencher) {
@@ -271,11 +260,12 @@ mod tests {
             };
 
             fb.plot_pixel(0, 0, color);
-
-            assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
-            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-            assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+            fb.flip();
         });
+
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
 
         cleanup(fb);
     }
@@ -291,11 +281,12 @@ mod tests {
             };
 
             fb.plot_pixel(0, 0, color);
-
-            assert_eq!(fb.memio.as_ptr().index(2).read(), 100);
-            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-            assert_eq!(fb.memio.as_ptr().index(0).read(), 255);
+            fb.flip();
         });
+
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 100);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 255);
 
         cleanup(fb);
     }
@@ -316,11 +307,12 @@ mod tests {
             };
 
             fb.plot_pixel(0, 0, color);
-
-            assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
-            assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
-            assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
+            fb.flip();
         });
+
+        assert_eq!(fb.memio.as_ptr().index(2).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(1).read(), 255);
+        assert_eq!(fb.memio.as_ptr().index(0).read(), 100);
 
         cleanup(fb);
     }
@@ -336,13 +328,14 @@ mod tests {
             };
 
             fb.fill(color);
-
-            fb.memio
-                .as_ptr()
-                .iter()
-                .step_by(4)
-                .for_each(|x| assert_eq!(x.read(), 100));
+            fb.flip();
         });
+
+        fb.memio
+            .as_ptr()
+            .iter()
+            .step_by(4)
+            .for_each(|x| assert_eq!(x.read(), 100));
 
         cleanup(fb);
     }
@@ -358,13 +351,14 @@ mod tests {
             };
 
             fb.fill(color);
-
-            fb.memio
-                .as_ptr()
-                .iter()
-                .step_by(4)
-                .for_each(|x| assert_eq!(x.read(), 255));
+            fb.flip();
         });
+
+        fb.memio
+            .as_ptr()
+            .iter()
+            .step_by(4)
+            .for_each(|x| assert_eq!(x.read(), 255));
 
         cleanup(fb);
     }
@@ -384,13 +378,14 @@ mod tests {
             };
 
             fb.fill(color);
-
-            fb.memio
-                .as_ptr()
-                .iter()
-                .step_by(4)
-                .for_each(|x| assert_eq!(x.read(), 100));
+            fb.flip();
         });
+
+        fb.memio
+            .as_ptr()
+            .iter()
+            .step_by(4)
+            .for_each(|x| assert_eq!(x.read(), 100));
 
         cleanup(fb);
     }
@@ -402,15 +397,19 @@ mod tests {
             green_position: 8,
             blue_position: 0,
         });
+
         fb.fill(Color::WHITE);
+        fb.flip();
+
         b.iter(|| {
             fb.scroll(Pixels(fb.info.height));
-
-            fb.memio
-                .as_ptr()
-                .iter()
-                .for_each(|x| assert_eq!(x.read(), 0));
+            fb.flip();
         });
+
+        fb.memio
+            .as_ptr()
+            .iter()
+            .for_each(|x| assert_eq!(x.read(), 0));
 
         cleanup(fb);
     }

@@ -47,8 +47,11 @@ pub trait GraphicBackend {
 
     fn fill(&mut self, color: Color);
 
+    fn flip(&mut self);
+
     fn clear(&mut self) {
         self.fill(Color::BLACK);
+        self.flip();
     }
 
     fn get_x(&self) -> usize;
@@ -97,5 +100,6 @@ pub trait TextDrawer: GraphicBackend {
         for c in str.chars() {
             self.draw_char(c, color);
         }
+        self.flip();
     }
 }
