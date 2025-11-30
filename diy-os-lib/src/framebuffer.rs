@@ -402,13 +402,8 @@ mod tests {
             green_position: 8,
             blue_position: 0,
         });
+        fb.fill(Color::WHITE);
         b.iter(|| {
-            let color = crate::console::graphics::Color {
-                red: 255,
-                green: 255,
-                blue: 100,
-            };
-
             fb.scroll(Pixels(fb.info.height));
 
             fb.memio
