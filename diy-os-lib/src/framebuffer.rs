@@ -60,16 +60,10 @@ pub fn init(framebuffer_bootinfo: bootloader_api::info::FrameBuffer) {
 pub struct FrameBuffer {
     info: FrameBufferInfo,             // Info about the frame buffer
     memio: VolatileRef<'static, [u8]>, // the underlying memory mapped IO
-    buffer: &'static mut [u8],         // Second Buffer
+    buffer: Box<[u8]>,                 // Second Buffer
     x: usize,                          // Current pixel in the x axis
     y: usize,                          // Current pixel in the y axis
     bytes_fn: fn(PixelFormat, Color) -> (u8, u8, u8, u8), // Converts the colors to 4 u8s
-}
-
-impl Drop for FrameBuffer {
-    fn drop(&mut self) {
-        // unsafe { drop(Box::from_raw(self.buffer)) };
-    }
 }
 
 impl FrameBuffer {
@@ -81,7 +75,7 @@ impl FrameBuffer {
         Self {
             info,
             memio: unsafe { VolatileRef::new(memio.into()) },
-            buffer: unsafe { Box::<[_]>::leak(Box::new_zeroed_slice(memio.len()).assume_init()) },
+            buffer: unsafe { Box::new_zeroed_slice(memio.len()).assume_init() },
             x: 0,
             y: 0,
             bytes_fn,
@@ -111,7 +105,7 @@ impl FrameBuffer {
 
     #[cfg(not(miri))]
     fn flip(&mut self) {
-        self.memio.as_mut_ptr().copy_from_slice(self.buffer);
+        self.memio.as_mut_ptr().copy_from_slice(&self.buffer);
     }
 }
 
@@ -241,13 +235,16 @@ mod tests {
             },
             _ => todo!(),
         };
+
         let mut framebuffer = FrameBuffer::new(info, mem, bytes_fn);
 
         framebuffer.clear();
         framebuffer
     }
 
-    fn cleanup(mut fb: FrameBuffer) {}
+    fn cleanup(mut fb: FrameBuffer) {
+        drop(unsafe { Box::from_raw(fb.memio.as_ptr().as_raw_ptr().as_ptr()) });
+    }
 
     #[bench]
     fn plotting_bgr_test(b: &mut Bencher) {
