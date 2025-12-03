@@ -19,8 +19,8 @@ impl<T> LinkedList<T> {
     }
 
     pub fn append(&mut self, value: T) {
-        if self.head.is_some() {
-            let mut next = self.head.as_mut().unwrap();
+        if let Some(head) = &mut self.head {
+            let mut next = head;
 
             while next.next.is_some() {
                 next = next.next.as_mut().unwrap();
