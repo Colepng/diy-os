@@ -156,15 +156,18 @@ fn setup_tasks(
 fn kernal_shell() -> ! {
     let mut input = String::new();
 
+    print!(">>");
+
     loop {
         sleep(Duration::from(Miliseconds(10)));
         STDIN.with_mut_ref(|stdin| {
             stdin
                 .drain(..stdin.len())
-                .map(|keycode| {
-                    let char = char::from(keycode);
-                    diy_os::print!("{char}");
-                    char
+                .filter_map(|keycode| {
+                    char::try_from(keycode).map_or(None, |char| {
+                        diy_os::print!("{char}");
+                        Some(char)
+                    })
                 })
                 .collect_into(&mut input);
         });
@@ -230,6 +233,8 @@ fn kernal_shell() -> ! {
                         command => println!("{command} is invalid"),
                     }
                 }
+
+                print!(">>");
             }
 
             input.clear();
