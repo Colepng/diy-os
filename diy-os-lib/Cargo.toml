@@ -25,9 +25,9 @@ refine = { git = "https://github.com/Colepng/Refinement-types" }
 crc32fast = { version = "1.5.0", default-features = false }
 bitfield-struct = "0.13.0"
 
-[lib]
-test = false
-bench = false
+# [lib]
+# test = false
+# bench = false
 
 [features]
 debug = []
