@@ -115,7 +115,7 @@ pub fn primitive_memmapped_fat16_read_only_driver(partion_addr: usize, helper: &
 
     let entry_ptr = core::ptr::with_exposed_provenance::<MaybeUninit<UnknownEntry>>(root_dir_addr);
 
-    let iter = MaybeUninitIterator::<UnknownEntry, 2>::new(entry_ptr);
+    let iter = MaybeUninitIterator::<UnknownEntry, 4>::new(entry_ptr);
 
     iter.take_while(|entry| unsafe { entry.as_bytes()[0].assume_init() } != 0)
         .map(|entry| unsafe { entry.assume_init() })

@@ -140,6 +140,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
     }
 
     if should_schedule {
+        // println!("scheduling");
         // SAFETY: No spinlock is held over this point
         unsafe { schedule() };
     }

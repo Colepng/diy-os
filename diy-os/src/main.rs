@@ -91,6 +91,8 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
         };
 
         diy_os::RAMDISK_INFO.with_mut_ref(|info| info.replace(ramdisk_info));
+
+        wrapper()
     }
 
     println!("Hello, world!");
@@ -140,27 +142,30 @@ fn setup_tasks(
         frame_allocator,
     );
 
-    let fat32_driver = Task::new(
-        String::from("fat32 driver"),
-        wrapper,
-        mapper,
-        frame_allocator,
-    );
+    // let fat32_driver = Task::new(
+    //     String::from("fat32 driver"),
+    //     wrapper,
+    //     mapper,
+    //     frame_allocator,
+    // );
 
     let (_ps2_task, _keys_task, _shell_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
-        let _ = scheduler.spawn_task(fat32_driver);
+        // let _ = scheduler.spawn_task(fat32_driver);
 
         (ps2_task, keys_task, shell_task)
     });
 
     loop {
         sleep(Seconds(1).into());
+        // println!("main still alive");
         // debug!("Main task is still running properly");
     }
 }
+
+// fn testing_task() -> ! {}
 
 fn kernal_shell() -> ! {
     let mut input = String::new();

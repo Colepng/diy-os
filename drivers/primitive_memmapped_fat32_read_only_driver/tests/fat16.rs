@@ -7,6 +7,7 @@ use primitive_memmapped_fat32_read_only_driver::wrapper;
 
 fn setup_ramdisk() -> (*mut u8, usize, usize) {
     let ramdisk_path = "/home/cole/Documents/Projects/diy-os/drivers/primitive_memmapped_fat32_read_only_driver/tests/ramdisk.img";
+    // let ramdisk_path = "/home/cole/Documents/Projects/diy-os/sfs.img";
 
     let ramdisk = fs::read(ramdisk_path).unwrap();
 

@@ -95,7 +95,7 @@ impl PartionTableHeader {
     }
 
     fn valid_last_lba(&self, addr_of_memmaped_drive: u64) -> bool {
-        let ptr_to_alt: *const Self = core::ptr::without_provenance(
+        let ptr_to_alt: *const Self = core::ptr::with_exposed_provenance(
             // assuming block/sector size is 512 bytes
             usize::try_from(addr_of_memmaped_drive + (512 * self.lba_alt_table_header)).unwrap(),
         );
@@ -107,11 +107,12 @@ impl PartionTableHeader {
 
     fn valid_partion_array(&self, addr_of_memmaped_drive: u64) -> bool {
         let checksum = self.crc32_partion_entry_array;
+        let addr = addr_of_memmaped_drive + (self.partion_entry_lba * 512);
 
         // assuming block/sector size is 512 bytes
-        let ptr_to_start: *const u8 = core::ptr::without_provenance(
-            usize::try_from(addr_of_memmaped_drive + (self.partion_entry_lba * 512)).unwrap(),
-        );
+        let ptr_to_start: *const u8 =
+            core::ptr::with_exposed_provenance(usize::try_from(addr).unwrap());
+        crate::println!("addr: {addr:?}");
         let bytes = core::ptr::slice_from_raw_parts(
             ptr_to_start,
             usize::try_from(self.size_of_partion_entry * self.num_of_partions).unwrap(),
@@ -406,6 +407,13 @@ pub mod mbr {
         unknown: u16,
         pub partion_record: [PartionTableEntry; 4],
         pub signature: u16,
+    }
+
+    impl MBR {
+        /// Crates a new mbr, addr must be the address of a valid mbr
+        pub unsafe fn new(addr: usize) -> MBR {
+            unsafe { core::ptr::with_exposed_provenance::<Self>(addr).read() }
+        }
     }
 
     #[derive(Debug, Clone, Copy)]

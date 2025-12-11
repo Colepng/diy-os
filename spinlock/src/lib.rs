@@ -24,7 +24,7 @@ use core::{
 #[derive(Debug)]
 pub struct Spinlock<T: ?Sized> {
     locked: AtomicBool,
-    #[cfg(not(test))]
+    #[cfg(target_os = "none")]
     interrupts_enabled: UnsafeCell<Option<bool>>,
     data: UnsafeCell<T>,
 }
@@ -33,7 +33,7 @@ impl<T> Spinlock<T> {
     pub const fn new(data: T) -> Self {
         Self {
             locked: AtomicBool::new(false),
-            #[cfg(not(test))]
+            #[cfg(target_os = "none")]
             interrupts_enabled: UnsafeCell::new(None),
             data: UnsafeCell::new(data),
         }
@@ -74,7 +74,7 @@ impl<T: ?Sized> Spinlock<T> {
     }
 
     fn enable_interrupts(&self) {
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         unsafe {
             if (*self.interrupts_enabled.get()) == Some(true) {
                 x86_64::instructions::interrupts::enable();
@@ -83,12 +83,12 @@ impl<T: ?Sized> Spinlock<T> {
     }
 
     fn disable_interrupts(&self) {
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         unsafe {
             *self.interrupts_enabled.get() = Some(x86_64::instructions::interrupts::are_enabled());
         }
 
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         x86_64::instructions::interrupts::disable();
     }
 
@@ -190,7 +190,7 @@ impl<T: fmt::Display + ?Sized> fmt::Display for SpinlockGuard<'_, T> {
 #[derive(Debug)]
 pub struct SpinlockWithCallback<T: ?Sized> {
     locked: AtomicBool,
-    #[cfg(not(test))]
+    #[cfg(target_os = "none")]
     interrupts_enabled: UnsafeCell<Option<bool>>,
     callback: fn(&'static str) -> (),
     data: UnsafeCell<T>,
@@ -200,7 +200,7 @@ impl<T> SpinlockWithCallback<T> {
     pub const fn new(data: T, callback: fn(&'static str) -> ()) -> Self {
         Self {
             locked: AtomicBool::new(false),
-            #[cfg(not(test))]
+            #[cfg(target_os = "none")]
             interrupts_enabled: UnsafeCell::new(None),
             callback,
             data: UnsafeCell::new(data),
@@ -249,7 +249,7 @@ impl<T: ?Sized> SpinlockWithCallback<T> {
     }
 
     fn enable_interrupts(&self) {
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         unsafe {
             if (*self.interrupts_enabled.get()) == Some(true) {
                 x86_64::instructions::interrupts::enable();
@@ -258,12 +258,12 @@ impl<T: ?Sized> SpinlockWithCallback<T> {
     }
 
     fn disable_interrupts(&self) {
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         unsafe {
             *self.interrupts_enabled.get() = Some(x86_64::instructions::interrupts::are_enabled());
         }
 
-        #[cfg(not(test))]
+        #[cfg(target_os = "none")]
         x86_64::instructions::interrupts::disable();
     }
 

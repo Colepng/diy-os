@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 diy-os = { path = "../..//diy-os-lib" }
 anyhow = { version = "1.0.94", default-features = false }
+either = { version = "1.15.0", default-features = false }
 
 [lib]
 test = false

@@ -12,6 +12,7 @@ pub fn print(args: fmt::Arguments) {
     if let Some(frame_buffer) = FRAME_BUFER.acquire().deref_mut() {
         let _ = frame_buffer.write_fmt(args);
     }
+    #[cfg(target_os = "none")]
     print_serial(args);
 }
 

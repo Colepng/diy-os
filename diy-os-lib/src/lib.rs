@@ -1,5 +1,5 @@
-#![cfg_attr(not(test), no_std)]
-#![cfg_attr(not(test), no_main)]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(target_os = "none", no_main)]
 #![feature(abi_x86_interrupt)]
 #![feature(negative_impls)]
 #![feature(ascii_char)]
@@ -61,7 +61,7 @@ use crate::multitasking::mutex::Mutex;
 
 extern crate alloc;
 
-#[cfg(not(test))]
+#[cfg(target_os = "none")]
 pub mod allocator;
 pub mod collections;
 pub mod console;
@@ -88,7 +88,12 @@ pub struct RamdiskInfo {
     pub len: u64,
 }
 
+// #[cfg(target_os = "none")]
+// #[cfg(not(test))]
 pub static RAMDISK_INFO: Mutex<Option<RamdiskInfo>> = Mutex::new(None);
+// #[cfg(not(target_os = "none"))]
+// #[cfg(test)]
+// pub static RAMDISK_INFO: std::sync::Mutex<Option<RamdiskInfo>> = std::sync::Mutex::new(None);
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
@@ -124,7 +129,7 @@ pub fn kernel_early(
     let mut frame_allocator =
         unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
     let mut mapper = unsafe { memory::init(offset_addr) };
-    #[cfg(not(test))]
+    #[cfg(target_os = "none")]
     allocator::setup_heap(&mut mapper, &mut frame_allocator)
         .map_err(InitError::FailedToSetupHeap)?;
 
