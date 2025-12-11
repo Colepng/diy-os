@@ -2,11 +2,8 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spinlock::Spinlock;
 use x86_64::{
-    VirtAddr,
-    structures::idt::{
-        HandlerFuncType, HandlerFuncWithErrCode, InterruptDescriptorTable, InterruptStackFrame,
-        PageFaultErrorCode,
-    },
+    VirtAddr, set_general_handler,
+    structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
 
 use crate::{
@@ -27,18 +24,14 @@ pub static PICS: Spinlock<ChainedPics> =
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
-        // set_general_handler!(&mut idt, general_handler);
+        set_general_handler!(&mut idt, general_handler);
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         unsafe {
             idt.invalid_opcode
                 .set_handler_fn(invalid_opcode_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
-
-            let addr =
-                HandlerFuncType::to_virt_addr(double_fault_handler as HandlerFuncWithErrCode);
-
             idt.double_fault
-                .set_handler_addr(addr)
+                .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
             idt.page_fault
                 .set_handler_fn(page_fault_handler)
@@ -70,13 +63,13 @@ pub fn unmask() {
     unsafe { PICS.acquire().write_masks(0b1111_1000, 0b1111_1111) };
 }
 
-// #[allow(clippy::needless_pass_by_value)]
-// fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
-//     panic!(
-//         "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex dec {index} \nindex hex {index:x}",
-//         stack_frame, error_code
-//     );
-// }
+#[allow(clippy::needless_pass_by_value)]
+fn general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
+    panic!(
+        "EXCEPTION: unknown fault\n{:#?}, \nerror code {:?}, \nindex dec {index} \nindex hex {index:x}",
+        stack_frame, error_code
+    );
+}
 
 extern "x86-interrupt" fn spurious_handler(_stack_frame: InterruptStackFrame) {
     crate::print!("got suprious interrupt assuming nothing bad happend");
@@ -113,7 +106,10 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     println!("EXCEPTION: BREAKPOINT\n{:#?}", stack_frame);
 }
 
-extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+extern "x86-interrupt" fn double_fault_handler(
+    stack_frame: InterruptStackFrame,
+    error_code: u64,
+) -> ! {
     panic!(
         "EXCEPTION: DOUBLE FAULT\n{:#?}, \nerror code {}",
         stack_frame, error_code
