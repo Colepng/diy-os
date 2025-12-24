@@ -1,3 +1,4 @@
+use crate::gdt::TSS;
 use crate::hlt_loop;
 use crate::timer::{Duration, Miliseconds, TIME_KEEPER, TimeKeeper};
 use alloc::collections::linked_list::LinkedList;
@@ -324,6 +325,24 @@ pub unsafe fn allocate_stack(
     page_stack
 }
 
+#[allow(clippy::needless_pass_by_value)]
+/// Switch to the next task in the linked list
+///
+/// # Safety
+/// Callers must insure that interrupts are disabled while this function is being called.
+/// `current_task` must also be the current task
+pub unsafe fn switch_to_task(current_task: Arc<Spinlock<Task>>, next_task: Arc<Spinlock<Task>>) {
+    let current_task_ptr = current_task.with_mut_ref(core::ptr::from_mut);
+
+    let next_task_ptr = next_task.with_mut_ref(|task| {
+        (unsafe { TSS.privilege_stack_table })[0] = task.stack_top;
+
+        core::ptr::from_mut(task)
+    });
+
+    unsafe { switch_to_task_inner(current_task_ptr, next_task_ptr) };
+}
+
 /// Switch to the next task in the linked list
 ///
 /// # Safety
@@ -334,22 +353,29 @@ pub unsafe fn allocate_stack(
 // arg2: rsi
 // rbx,  rsp, rbp, r12, r13, r14, r15 need to be saved
 #[unsafe(naked)]
-pub unsafe extern "sysv64" fn switch_to_task(current_task: *mut Task, next_task: *mut Task) {
+pub unsafe extern "sysv64" fn switch_to_task_inner(current_task: *mut Task, next_task: *mut Task) {
     core::arch::naked_asm!(
         "mov [rdi+48], r15",
+        "mov r15, [rsi+48]",
         "mov [rdi+40], r14",
+        "mov r14, [rsi+40]",
         "mov [rdi+32], r13",
+        "mov r13, [rsi+32]",
         "mov [rdi+24], r12",
+        "mov r12, [rsi+24]",
         "mov [rdi+16], rbx",
+        // "mov rbx, [rsi+16]",
         "mov [rdi+8], rbp", // store rbp
+        "mov rbp, [rsi+8]", //load rbp
         "mov [rdi], rsp",   // store rsp in task struct
         "mov rsp, [rsi]",   // load rsp from the next task
-        "mov rbp, [rsi+8]", //load rbp
+        "mov rbx, cr3",     // change virtual address spaces
+        "mov [rdi+56], rbx",
         "mov rbx, [rsi+16]",
-        "mov r12, [rsi+24]",
-        "mov r13, [rsi+32]",
-        "mov r14, [rsi+40]",
-        "mov r15, [rsi+48]",
+        "push rbx",
+        "mov rbx, [rsi+56]",
+        "mov cr3, rbx",
+        "pop rbx",
         "ret",
     );
 }
@@ -381,25 +407,21 @@ pub unsafe fn schedule() {
                 let current_task = scheduler.current_task.take().unwrap();
                 let next_task = scheduler.ready_tasks.pop_front().unwrap();
 
-                let current_task_ptr = current_task.with_mut_ref(|task| {
+                current_task.with_mut_ref(|task| {
                     task.time_used += elapsed;
                     task.state = State::ReadyToRun;
-
-                    core::ptr::from_mut(task)
                 });
 
-                let next_task_ptr = next_task.with_mut_ref(|task| {
+                next_task.with_mut_ref(|task| {
                     task.state = State::Running;
-
-                    core::ptr::from_mut(task)
                 });
 
-                scheduler.current_task.replace(next_task);
-                scheduler.ready_tasks.push_back(current_task);
+                scheduler.current_task.replace(next_task.clone());
+                scheduler.ready_tasks.push_back(current_task.clone());
                 scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
                 unsafe {
-                    switch_to_task(current_task_ptr, next_task_ptr);
+                    switch_to_task(current_task, next_task);
                 }
             }
         });
@@ -422,34 +444,30 @@ pub unsafe fn block_task(reason: BlockedReason) {
                 let current_task = scheduler.current_task.take().unwrap();
                 let next_task = scheduler.ready_tasks.pop_front().unwrap();
 
-                let current_task_ptr = current_task.with_mut_ref(|task| {
+                current_task.with_mut_ref(|task| {
                     task.time_used += elapsed;
                     task.state = State::Blocked(reason);
-
-                    core::ptr::from_mut(task)
                 });
 
-                let next_task_ptr = next_task.with_mut_ref(|task| {
+                next_task.with_mut_ref(|task| {
                     task.state = State::Running;
-
-                    core::ptr::from_mut(task)
                 });
 
                 match reason {
                     BlockedReason::Special(special_cases) => match special_cases {
                         SpecialCases::Cleaner => {
-                            scheduler.cleaner_task.replace(current_task);
+                            scheduler.cleaner_task.replace(current_task.clone());
                         }
                     },
                     _ => {
-                        scheduler.blocked_tasks.push_front(current_task);
+                        scheduler.blocked_tasks.push_front(current_task.clone());
                     }
                 }
 
-                scheduler.current_task.replace(next_task);
+                scheduler.current_task.replace(next_task.clone());
                 scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
-                unsafe { switch_to_task(current_task_ptr, next_task_ptr) };
+                unsafe { switch_to_task(current_task, next_task) };
             }
         });
     });
@@ -477,28 +495,24 @@ pub unsafe fn unblock_task(task: Arc<Spinlock<Task>>) {
             let current_task = scheduler.current_task.take().unwrap();
             let next_task = task;
 
-            let current_task_ptr = current_task.with_mut_ref(|task| {
+            current_task.with_mut_ref(|task| {
                 task.time_used += elapsed;
                 task.state = State::ReadyToRun;
-
-                core::ptr::from_mut(task)
             });
 
-            let next_task_ptr = next_task.with_mut_ref(|task| {
+            next_task.with_mut_ref(|task| {
                 task.state = State::Running;
                 debug!("unblocking task {}", task.common_name);
-
-                core::ptr::from_mut(task)
             });
 
             // no tasks were running before hand so preempt
             if scheduler.ready_tasks.is_empty() {
-                scheduler.current_task.replace(next_task);
-                scheduler.ready_tasks.push_back(current_task);
+                scheduler.current_task.replace(next_task.clone());
+                scheduler.ready_tasks.push_back(current_task.clone());
                 scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
                 unsafe {
-                    switch_to_task(current_task_ptr, next_task_ptr);
+                    switch_to_task(current_task, next_task);
                 }
             } else {
                 scheduler.current_task.replace(current_task);
@@ -560,20 +574,16 @@ pub unsafe fn exit() -> ! {
             let current_task = scheduler.current_task.take().unwrap();
             let next_task = scheduler.ready_tasks.pop_front().unwrap();
 
-            let current_task_ptr = current_task.with_mut_ref(|task| {
+            current_task.with_mut_ref(|task| {
                 task.state = State::Dead;
-
-                core::ptr::from_mut(task)
             });
 
-            let next_task_ptr = next_task.with_mut_ref(|task| {
+            next_task.with_mut_ref(|task| {
                 task.state = State::Running;
-
-                core::ptr::from_mut(task)
             });
 
-            scheduler.current_task.replace(next_task);
-            scheduler.dead_tasks.push_back(current_task);
+            scheduler.current_task.replace(next_task.clone());
+            scheduler.dead_tasks.push_back(current_task.clone());
             scheduler.time_slice = Scheduler::TIME_SLICE_AMOUNT;
 
             // If cleaner is not in it's field it must already be ready
@@ -582,7 +592,7 @@ pub unsafe fn exit() -> ! {
             }
 
             unsafe {
-                switch_to_task(current_task_ptr, next_task_ptr);
+                switch_to_task(current_task, next_task);
             }
         });
     });

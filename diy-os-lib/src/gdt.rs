@@ -14,7 +14,8 @@ lazy_static! {
         let _kernal_data = gdt.append(Descriptor::kernel_data_segment());
         let _user_code = gdt.append(Descriptor::user_code_segment());
         let _user_data = gdt.append(Descriptor::user_data_segment());
-        let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
+        #[allow(static_mut_refs)]
+        let tss_selector = gdt.append(Descriptor::tss_segment(unsafe { &TSS }));
         (
             gdt,
             Selectors {
@@ -31,18 +32,14 @@ const STACK_SIZE: usize = 4096 * 5;
 // just allocate some pages
 static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
 
-lazy_static! {
-    static ref TSS: TaskStateSegment = {
-        let mut tss = TaskStateSegment::new();
-        tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            let stack_start = VirtAddr::from_ptr(&raw mut STACK);
-            stack_start + STACK_SIZE as u64
-        };
-        tss
-    };
-}
+pub static mut TSS: TaskStateSegment = TaskStateSegment::new();
 
 pub fn init() {
+    (unsafe { TSS.interrupt_stack_table })[DOUBLE_FAULT_IST_INDEX as usize] = {
+        let stack_start = VirtAddr::from_ptr(&raw mut STACK);
+        stack_start + STACK_SIZE as u64
+    };
+
     GDT.0.load();
 
     unsafe {
