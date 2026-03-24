@@ -17,9 +17,8 @@ pub mod linked_list;
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 
 #[allow(fuzzy_provenance_casts)]
-pub const HEAP_START: *mut u8 = const { 0x_4444_4444_0000 as *mut u8 };
-
-pub const HEAP_SIZE: usize = 10_000 * 1024; // 100 KiB
+pub const HEAP_START: usize = 0xffffc00000000000;
+pub const HEAP_SIZE: usize = 100 * 1024 * 1024; // 100 MiB 
 
 pub struct Dummy;
 
@@ -53,7 +52,10 @@ pub fn setup_heap(
     }
 
     unsafe {
-        ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE);
+        ALLOCATOR.lock().init(
+            core::ptr::with_exposed_provenance_mut(HEAP_START),
+            HEAP_SIZE,
+        );
     }
 
     Ok(())

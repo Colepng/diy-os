@@ -22,6 +22,7 @@
 #![feature(int_from_ascii)]
 #![feature(test)]
 #![feature(pointer_is_aligned_to)]
+#![feature(ptr_as_uninit)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -81,6 +82,8 @@ pub mod serial;
 pub mod syscalls;
 pub mod timer;
 pub mod usermode;
+
+pub const P_OFFSET: u64 = 0xffff800000000000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RamdiskInfo {

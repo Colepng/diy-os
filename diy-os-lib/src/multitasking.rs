@@ -1,15 +1,15 @@
 use crate::gdt::TSS;
-use crate::hlt_loop;
 use crate::timer::{Duration, Miliseconds, TIME_KEEPER, TimeKeeper};
+use crate::{P_OFFSET, hlt_loop, memory};
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use log::{debug, info};
 use spinlock::Spinlock;
-use x86_64::VirtAddr;
 use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
+use x86_64::{PhysAddr, VirtAddr};
 use x86_64::{registers::control::Cr3, structures::paging::PhysFrame};
 
 // pub mod mutex;
@@ -20,8 +20,8 @@ pub mod mutex {
 // TEMP, this is not checked big UB!
 // Setup some way to track used pages
 static STACK_COUNTER: Spinlock<u64> = Spinlock::new(0);
-// const START_ADDR: VirtAddr = VirtAddr::new(0x0000_0000_0804_aff8);
-const START_ADDR: VirtAddr = VirtAddr::new(0x3000_0000_0000);
+
+const START_ADDR: VirtAddr = VirtAddr::new(0xffffc10000000000);
 
 pub static SCHEDULER: Spinlock<Scheduler> = Spinlock::new(Scheduler::new());
 
@@ -197,7 +197,7 @@ pub struct Task {
     pub stack: VirtAddr,     // rsp
     pub stack_top: VirtAddr, //rbp
     registers: Registers,
-    pub cr3: PhysFrame<Size4KiB>,
+    pub cr3_paddr: PhysAddr,
     pub time_used: Duration,
     pub common_name: String,
     pub state: State,
@@ -213,7 +213,6 @@ pub enum TaskBuildError {
 }
 
 impl Task {
-    #[allow(clippy::new_ret_no_self)]
     /// Allocates and insets a new task the linked list
     pub fn new(
         common_name: String,
@@ -233,10 +232,18 @@ impl Task {
 
         info!("allocated new stack");
 
-        unsafe { Self::crate_new_task(common_name, task_fn, stack_page) }
+        unsafe { Self::crate_new_task(common_name, task_fn, stack_page, frame_alloc) }
     }
 
-    pub fn allocate_task(common_name: String, top_of_stack: VirtAddr, stack: VirtAddr) -> Self {
+    pub fn allocate_task(
+        common_name: String,
+        top_of_stack: VirtAddr,
+        stack: VirtAddr,
+        frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+    ) -> Self {
+        let pml4 = unsafe { memory::active_level_4_table(VirtAddr::new(P_OFFSET)) };
+        let (_, frame) = memory::alloc_table(frame_alloc, VirtAddr::new(P_OFFSET), pml4.clone());
+
         Self {
             stack,
             stack_top: top_of_stack,
@@ -247,7 +254,7 @@ impl Task {
                 r14: 0,
                 r15: 0,
             },
-            cr3: Cr3::read().0,
+            cr3_paddr: frame.start_address(),
             time_used: Duration::new(),
             common_name,
             state: State::ReadyToRun,
@@ -263,11 +270,17 @@ impl Task {
         common_name: String,
         new_task: fn() -> !,
         stack_page: Page<Size4KiB>,
+        frame_alloc: &mut impl FrameAllocator<Size4KiB>,
     ) -> Self {
         let end_of_stack_addr = stack_page.start_address() + 0x1000;
         let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
 
-        let task = Self::allocate_task(common_name, end_of_stack_addr, end_of_stack_addr - (8 * 2));
+        let task = Self::allocate_task(
+            common_name,
+            end_of_stack_addr,
+            end_of_stack_addr - (8 * 2),
+            frame_alloc,
+        );
 
         // Setup the new stack
         unsafe {
@@ -311,13 +324,7 @@ pub unsafe fn allocate_stack(
     // map page for stack
     unsafe {
         mapper
-            .map_to_with_table_flags(
-                page_stack,
-                stack_frame,
-                stack_flags,
-                stack_flags,
-                frame_alloc,
-            )
+            .map_to(page_stack, stack_frame, stack_flags, frame_alloc)
             .unwrap()
             .flush();
     }
