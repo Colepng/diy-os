@@ -7,6 +7,7 @@
     clippy::style,
     clippy::todo
 )]
+#![allow(clippy::uninlined_format_args)]
 #![deny(
     clippy::suspicious,
     clippy::correctness,

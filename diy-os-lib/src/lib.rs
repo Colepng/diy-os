@@ -34,7 +34,8 @@
     clippy::missing_panics_doc,
     clippy::fn_to_numeric_cast,
     clippy::unnecessary_box_returns,
-    clippy::linkedlist
+    clippy::linkedlist,
+    clippy::uninlined_format_args
 )]
 
 use bootloader_api::BootInfo;
