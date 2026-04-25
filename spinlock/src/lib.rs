@@ -42,7 +42,7 @@ impl<T> Spinlock<T> {
 
 impl<T: ?Sized> Spinlock<T> {
     pub fn is_acquired(&self) -> bool {
-        self.locked.load(Ordering::Acquire)
+        self.locked.load(Ordering::Relaxed)
     }
 
     /// Acquires a lock and disables interrupts.
