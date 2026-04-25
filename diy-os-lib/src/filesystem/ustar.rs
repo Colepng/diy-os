@@ -41,13 +41,13 @@ impl Ustar {
             };
 
             if has_data {
-                let data = unsafe { &mut *(ptr.offset(1).cast::<Data>()) };
+                let data = unsafe { &mut *(ptr.add(1).cast::<Data>()) };
 
                 file.data = Some(data);
 
-                ptr = unsafe { ptr.offset(2) };
+                ptr = unsafe { ptr.add(2) };
             } else {
-                ptr = unsafe { ptr.offset(1) };
+                ptr = unsafe { ptr.add(1) };
             }
 
             files.push(file);

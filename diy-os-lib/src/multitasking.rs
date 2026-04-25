@@ -271,9 +271,9 @@ impl Task {
 
         // Setup the new stack
         unsafe {
-            stack_ptr = stack_ptr.offset(-1);
+            stack_ptr = stack_ptr.sub(1);
             *stack_ptr = new_task as u64;
-            stack_ptr = stack_ptr.offset(-1);
+            stack_ptr = stack_ptr.sub(1);
             *stack_ptr = first_time_task_cleanup as *const () as u64;
         }
 
