@@ -79,7 +79,7 @@ extern "x86-interrupt" fn spurious_handler(_stack_frame: InterruptStackFrame) {
 }
 
 extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
-    panic!("invalid_opcode \n{:#?}", stack_frame,)
+    panic!("invalid_opcode \n{:#?}", stack_frame)
 }
 
 extern "x86-interrupt" fn general_protection_handler(
