@@ -8,6 +8,8 @@
 #![feature(variant_count)]
 #![feature(const_trait_impl)]
 #![feature(const_convert)]
+#![feature(test)] // clippy can't check if test is needed
+#![feature(slice_ptr_get)]
 #![warn(
     clippy::pedantic,
     clippy::nursery,
@@ -35,7 +37,8 @@
     clippy::fn_to_numeric_cast,
     clippy::unnecessary_box_returns,
     clippy::linkedlist,
-    clippy::uninlined_format_args
+    clippy::uninlined_format_args,
+    unused_features // only for test
 )]
 
 use bootloader_api::BootInfo;
