@@ -340,6 +340,9 @@ pub unsafe fn switch_to_task(current_task: Arc<Spinlock<Task>>, next_task: Arc<S
         core::ptr::from_mut(task)
     });
 
+    drop(current_task);
+    drop(next_task);
+
     unsafe { switch_to_task_inner(current_task_ptr, next_task_ptr) };
 }
 
