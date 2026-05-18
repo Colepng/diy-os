@@ -31,6 +31,7 @@ use diy_os::{
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
+    pci::ide::init,
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
@@ -91,6 +92,22 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     println!("Hello, world!");
 
+    for i in 0..=255 {
+        for j in 0..32 {
+            if let Some(dev_info) = diy_os::pci::get_info(i, j, 0) {
+                if dev_info.header_type.multi_func() {
+                    for k in 1..=7 {
+                        let device = diy_os::pci::get_info(i, j, k);
+                        println!("dev_info func {k}: {device:#X?}");
+                    }
+                }
+                println!("dev_info: {dev_info:#X?}");
+            }
+        }
+    }
+
+    // let's just say we detected that bus 0 device 1 function 1 was the ide controller
+
     setup_tasks(&mut mapper, &mut frame_allocator)?;
 }
 
@@ -136,18 +153,24 @@ fn setup_tasks(
         frame_allocator,
     );
 
+    // let ide = Task::new(String::from("ide"), ide_task, mapper, frame_allocator);
+
     let (_ps2_task, _keys_task, _shell_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
+        // let _ = scheduler.spawn_task(ide);
 
         (ps2_task, keys_task, shell_task)
     });
 
-    loop {
-        sleep(Seconds(1).into());
-        // debug!("Main task is still running properly");
-    }
+    let ide_controller = diy_os::pci::get_info(0, 1, 1).unwrap();
+
+    init(ide_controller);
+    // loop {
+    //     sleep(Seconds(1).into());
+    //     // debug!("Main task is still running properly");
+    // }
 }
 
 fn kernal_shell() -> ! {
