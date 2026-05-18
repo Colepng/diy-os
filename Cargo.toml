@@ -29,6 +29,7 @@ fn_to_numeric_cast = "allow"
 unnecessary_box_returns = "allow"
 linkedlist = "allow"
 uninlined_format_args = "allow"
+struct_field_names = "allow"
 
 [workspace.lints.rust]
 unused_features = "allow" # only for test

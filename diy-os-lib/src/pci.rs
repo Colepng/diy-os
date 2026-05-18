@@ -4,7 +4,6 @@ use x86_64::instructions::port;
 use bitfield_struct::{bitenum, bitfield};
 
 pub mod ide;
-pub mod virtio;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -109,6 +108,7 @@ pub struct BistReg {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(unused)]
 pub struct Header {
     bar_addr: [u32; 6],
     cardbus_cis_ptr: u32,
@@ -297,7 +297,7 @@ unsafe fn read_pci_config_reg(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
         | usize::from(slot) << 11
         | usize::from(func) << 8
         | usize::from(offset)
-        | 0x80000000;
+        | 0x8000_0000;
 
     let mut port = port::PortWriteOnly::<u32>::new(0xCF8);
     unsafe {
