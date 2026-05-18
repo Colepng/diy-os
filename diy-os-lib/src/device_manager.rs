@@ -16,7 +16,7 @@ pub struct DeviceManager {
 
 impl DeviceManager {
     pub fn print_devices(&self) {
-        for device in self.devices.iter() {
+        for device in &self.devices {
             device.print_device();
         }
     }
@@ -24,10 +24,14 @@ impl DeviceManager {
 
 const PCI_AVAILABLE: bool = true;
 
+/// # Errors
+/// Will error if ide controller fails to initialize
 pub fn init_device_manager() -> Result<DeviceManager, Error> {
     let mut devices: Vec<Box<dyn Device>> = Vec::new();
     // check what buses/protocols supported, rn only pci, assuming it's available
-    assert!(PCI_AVAILABLE);
+    const {
+        assert!(PCI_AVAILABLE);
+    }
 
     let pci = pci::enumerate();
 
@@ -42,23 +46,29 @@ pub fn init_device_manager() -> Result<DeviceManager, Error> {
     Ok(DeviceManager { devices })
 }
 
-pub trait Device: core::fmt::Debug {
-    fn children(&self) -> Option<Box<dyn Iterator<Item = Arc<Mutex<dyn Device>>>>>;
+type DeviceWrapper = Arc<Mutex<dyn Device>>;
+
+pub trait Device: core::fmt::Debug + Send + Sync {
+    fn children(&self) -> Option<Box<dyn Iterator<Item = DeviceWrapper>>>;
 
     fn print_device(&self) {
         println!("device: {self:#?}");
 
         if let Some(children) = self.children() {
             for device in children {
+                #[allow(clippy::redundant_closure_for_method_calls)] // false positive submit pr
                 device.with_ref(|d| d.print_device());
             }
         }
     }
 }
 
+// TODO: proper errors
 pub trait BlockDevice: Device {
+    /// # Errors
     fn read_sectors(&mut self, lba: u64, count: u8, buffer: &mut [u8]) -> Result<(), Error>;
-    fn write_sectors(&mut self, lba: u64, count: u8, buffer: &[u8]) -> Result<(), ()>;
+    /// # Errors
+    fn write_sectors(&mut self, lba: u64, count: u8, buffer: &[u8]) -> Result<(), Error>;
     fn total_sectors(&self) -> u64;
     fn sector_size(&self) -> usize {
         512
