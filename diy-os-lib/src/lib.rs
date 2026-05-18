@@ -10,36 +10,7 @@
 #![feature(const_convert)]
 #![feature(test)] // clippy can't check if test is needed
 #![feature(slice_ptr_get)]
-#![warn(
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::perf,
-    clippy::style,
-    clippy::todo,
-    // clippy::undocumented_unsafe_blocks
-)]
-#![deny(
-    clippy::suspicious,
-    clippy::correctness,
-    clippy::complexity,
-    clippy::missing_const_for_fn,
-    unsafe_op_in_unsafe_fn,
-    fuzzy_provenance_casts
-)]
-#![allow(
-    clippy::return_self_not_must_use,
-    clippy::new_without_default,
-    clippy::module_name_repetitions,
-    clippy::must_use_candidate,
-    clippy::todo,
-    clippy::explicit_deref_methods,
-    clippy::missing_panics_doc,
-    clippy::fn_to_numeric_cast,
-    clippy::unnecessary_box_returns,
-    clippy::linkedlist,
-    clippy::uninlined_format_args,
-    unused_features // only for test
-)]
+#![deny(fuzzy_provenance_casts)]
 
 use bootloader_api::BootInfo;
 use log::info;

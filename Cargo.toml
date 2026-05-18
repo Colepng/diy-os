@@ -7,3 +7,30 @@ panic = "abort"
 
 [profile.release]
 panic = "abort"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+
+suspicious = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+missing_const_for_fn = "deny"
+
+return_self_not_must_use = "allow"
+new_without_default = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+todo = "allow"
+explicit_deref_methods = "allow"
+missing_panics_doc = "allow"
+fn_to_numeric_cast = "allow"
+unnecessary_box_returns = "allow"
+linkedlist = "allow"
+uninlined_format_args = "allow"
+
+[workspace.lints.rust]
+unused_features = "allow" # only for test
+unsafe_op_in_unsafe_fn = "deny"
+# fuzzy_provenance_casts = "deny" // hidden behind feature

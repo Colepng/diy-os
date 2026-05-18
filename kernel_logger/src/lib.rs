@@ -1,16 +1,5 @@
 #![no_std]
-#![warn(
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::perf,
-    clippy::style,
-    clippy::todo
-)]
 #![deny(
-    clippy::suspicious,
-    clippy::correctness,
-    clippy::complexity,
-    clippy::missing_const_for_fn,
     unsafe_code
 )]
 

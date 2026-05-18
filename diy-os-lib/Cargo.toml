@@ -30,3 +30,6 @@ bench = false
 
 [features]
 debug = []
+
+[lints]
+workspace = true
