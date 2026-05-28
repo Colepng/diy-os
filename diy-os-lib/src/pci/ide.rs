@@ -174,21 +174,21 @@ fn ide_read_sectors(
 
     let lba_0: u8 = (lba & 0xFF).try_into().expect("Should be only one byte"); // byte 1
 
-    let lba_1: u8 = (lba & 0xFF00 >> 8)
+    let lba_1: u8 = ((lba & 0xFF00) >> 8)
         .try_into()
         .expect("Should be only one byte"); // byte 2
 
-    let lba_2: u8 = (lba & 0x00FF_0000 >> 16)
+    let lba_2: u8 = ((lba & 0x00FF_0000) >> 16)
         .try_into()
         .expect("Should be only one byte"); // byte 3
 
-    let head: u8 = (lba & 0x0F00_0000 >> 24)
+    let head: u8 = ((lba & 0x0F00_0000) >> 24)
         .try_into()
         .expect("Should be only one byte"); // head
 
     let mut channel = drive.channel.acquire();
 
-    while channel.get_status_reg().busy() {} // wait until idle
+    while channel.get_status_reg().busy() {} // wait until idlea
 
     channel.write_hdd_sel(
         HddSelect::new()
@@ -202,7 +202,11 @@ fn ide_read_sectors(
     channel.write_lba_1(lba_1);
     channel.write_lba_2(lba_2);
 
-    for sector in buffer.chunks_exact_mut(256).take(num_of_sectors.into()) {
+    channel.send_command(Command::ReadPio);
+
+    let mut words_read = 0;
+
+    for sector in buffer.chunks_mut(512).take(num_of_sectors.into()) {
         // split the buffer into sectors
         poll_ide(&mut channel)?;
 
@@ -211,6 +215,14 @@ fn ide_read_sectors(
 
             buffer_word[0] = (word & 0xff).try_into().expect("should be only one byte"); // byte 1
             buffer_word[1] = (word >> 8).try_into().expect("should be only one byte"); // byte 1
+
+            words_read += 1;
+        }
+    }
+
+    for _ in (words_read % 256)..256 {
+        unsafe {
+            channel.data_reg.read();
         }
     }
 
