@@ -11,14 +11,24 @@ use crate::pci::{ClassCode, MassStorageSubclass};
 use alloc::vec::Vec;
 
 pub struct DeviceManager {
-    devices: Vec<Box<dyn Device>>,
+    pub devices: Vec<Arc<Mutex<dyn Device>>>,
+
+    pub block_devices: Vec<Arc<Mutex<dyn BlockDevice>>>,
 }
 
 impl DeviceManager {
     pub fn print_devices(&self) {
         for device in &self.devices {
-            device.print_device();
+            device.acquire().print_device();
         }
+    }
+
+    pub fn register_device(&mut self, device: Arc<Mutex<dyn Device>>) {
+        self.devices.push(device);
+    }
+
+    pub fn register_block_device(&mut self, device: Arc<Mutex<dyn BlockDevice>>) {
+        self.block_devices.push(device);
     }
 }
 
@@ -27,7 +37,10 @@ const PCI_AVAILABLE: bool = true;
 /// # Errors
 /// Will error if ide controller fails to initialize
 pub fn init_device_manager() -> Result<DeviceManager, Error> {
-    let mut devices: Vec<Box<dyn Device>> = Vec::new();
+    let mut dm = DeviceManager {
+        devices: Vec::new(),
+        block_devices: Vec::new(),
+    };
     // check what buses/protocols supported, rn only pci, assuming it's available
     const {
         assert!(PCI_AVAILABLE);
@@ -40,16 +53,17 @@ pub fn init_device_manager() -> Result<DeviceManager, Error> {
             && device.subclass == MassStorageSubclass::Ide
     }) {
         // assuming ide, I am lazyyy
-        devices.push(Box::new(create_ide_controller(*device)?));
+        let device = create_ide_controller(*device, &mut dm)?;
+        dm.register_device(Arc::new(Mutex::new(device)));
     }
 
-    Ok(DeviceManager { devices })
+    Ok(dm)
 }
 
-type DeviceWrapper = Arc<Mutex<dyn Device>>;
+type DeviceWrapped = Arc<Mutex<dyn Device>>;
 
 pub trait Device: core::fmt::Debug + Send + Sync {
-    fn children(&self) -> Option<Box<dyn Iterator<Item = DeviceWrapper>>>;
+    fn children(&self) -> Option<Box<dyn Iterator<Item = DeviceWrapped>>>;
 
     fn print_device(&self) {
         println!("device: {self:#?}");
@@ -60,6 +74,10 @@ pub trait Device: core::fmt::Debug + Send + Sync {
                 device.with_ref(|d| d.print_device());
             }
         }
+    }
+
+    fn as_block_device(&mut self) -> Option<&mut dyn BlockDevice> {
+        None
     }
 }
 
