@@ -1,3 +1,4 @@
+use crate::device_manager::DeviceManager;
 use crate::pci::ide::structs::Drive;
 use crate::pci::ide::structs::DriveType;
 use crate::pci::ide::structs::IdentificationSpaceRaw;
@@ -45,6 +46,10 @@ impl Device for Drive {
     fn children(&self) -> Option<Box<dyn Iterator<Item = Arc<Mutex<dyn Device>>>>> {
         None
     }
+
+    fn as_block_device(&mut self) -> Option<&mut dyn BlockDevice> {
+        Some(self)
+    }
 }
 
 impl BlockDevice for Drive {
@@ -69,7 +74,23 @@ pub enum IdeCreationError {
 }
 /// # Errors
 /// Will return `IdeCreationError::PciNativeMode` if the ide controller is in pci native mode
-pub fn create_ide_controller(pci_device: DeviceInfo) -> Result<IdeController, IdeCreationError> {
+pub fn create_ide_controller(
+    pci_device: DeviceInfo,
+    device_manager: &mut DeviceManager,
+) -> Result<IdeController, IdeCreationError> {
+    fn setup_drive(
+        drive: Drive,
+        device_manager: &mut DeviceManager,
+    ) -> Arc<Mutex<dyn BlockDevice>> {
+        let drive = Arc::new(Mutex::new(drive));
+
+        device_manager.register_device(drive.clone() as Arc<Mutex<dyn Device>>);
+
+        device_manager.register_block_device(drive.clone() as Arc<Mutex<dyn BlockDevice>>);
+
+        drive as Arc<Mutex<dyn BlockDevice>>
+    }
+
     // Pci native mode is unsupported
     if pci_device.prog_if.pci_native_mode_1() || pci_device.prog_if.pci_native_mode_2() {
         return Err(IdeCreationError::PciNativeMode);
@@ -82,10 +103,10 @@ pub fn create_ide_controller(pci_device: DeviceInfo) -> Result<IdeController, Id
     let (drive_3, drive_4) = init_channel(sec_channel);
 
     Ok(IdeController {
-        drive_1: drive_1.map(|drive| Arc::new(Mutex::new(drive)) as Arc<Mutex<dyn BlockDevice>>),
-        drive_2: drive_2.map(|drive| Arc::new(Mutex::new(drive)) as Arc<Mutex<dyn BlockDevice>>),
-        drive_3: drive_3.map(|drive| Arc::new(Mutex::new(drive)) as Arc<Mutex<dyn BlockDevice>>),
-        drive_4: drive_4.map(|drive| Arc::new(Mutex::new(drive)) as Arc<Mutex<dyn BlockDevice>>),
+        drive_1: drive_1.map(|drive| setup_drive(drive, device_manager)),
+        drive_2: drive_2.map(|drive| setup_drive(drive, device_manager)),
+        drive_3: drive_3.map(|drive| setup_drive(drive, device_manager)),
+        drive_4: drive_4.map(|drive| setup_drive(drive, device_manager)),
     })
 }
 
