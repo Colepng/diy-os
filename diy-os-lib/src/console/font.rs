@@ -8,6 +8,6 @@ pub const fn get_raster_width(style: FontWeight, size: RasterHeight) -> usize {
     noto_sans_mono_bitmap::get_raster_width(style, size)
 }
 
-pub fn get_raster(c: char, style: FontWeight, size: RasterHeight) -> Option<RasterizedChar> {
+pub const fn get_raster(c: char, style: FontWeight, size: RasterHeight) -> Option<RasterizedChar> {
     noto_sans_mono_bitmap::get_raster(c, style, size)
 }
