@@ -6,7 +6,7 @@ use anyhow::Error;
 
 use crate::multitasking::mutex::Mutex;
 use crate::pci;
-use crate::pci::ide::create_ide_controller;
+use crate::pci::ide::{IdeError, create_ide_controller};
 use crate::pci::{ClassCode, MassStorageSubclass};
 use alloc::vec::Vec;
 
@@ -81,12 +81,24 @@ pub trait Device: core::fmt::Debug + Send + Sync {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum BlockDeviceError {
+    #[error("The device ran into the following error `{0:?}`")]
+    ControllerError(#[from] IdeError),
+}
+
 // TODO: proper errors
 pub trait BlockDevice: Device {
     /// # Errors
-    fn read_sectors(&mut self, lba: u64, count: u8, buffer: &mut [u8]) -> Result<(), Error>;
+    fn read_sectors(
+        &mut self,
+        lba: u64,
+        count: u8,
+        buffer: &mut [u8],
+    ) -> Result<(), BlockDeviceError>;
     /// # Errors
-    fn write_sectors(&mut self, lba: u64, count: u8, buffer: &[u8]) -> Result<(), Error>;
+    fn write_sectors(&mut self, lba: u64, count: u8, buffer: &[u8])
+    -> Result<(), BlockDeviceError>;
     fn total_sectors(&self) -> u64;
     fn sector_size(&self) -> usize {
         512

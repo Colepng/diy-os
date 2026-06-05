@@ -1,20 +1,18 @@
-use core::ascii::Char;
-use core::mem::MaybeUninit;
-use core::ptr::NonNull;
+use crate::fat::{Cluster, Directory, EntryFlags, LongFileName, Sector, UnknownEntry};
 use core::str;
 
-use alloc::format;
-use alloc::string::{String, ToString};
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use diy_os::filesystem::File;
-use diy_os::multitasking::{exit, sleep};
-use diy_os::timer::Miliseconds;
-use either::Either;
+use diy_os::device_manager::BlockDevice;
+use diy_os::filesystem::{FileSystem, FileTrait};
+use diy_os::multitasking::mutex::Mutex;
+use either::Either::{Left, Right};
 
 use crate::fat::fat16::ExtenedBootRecord as Fat16EBR;
 use crate::fat::fat32::ExtenedBootRecord as Fat32EBR;
-use crate::fat::{BIOSParameterBlock, Directory, LongFileName, Sector, UnknownEntry};
-use crate::{Helper, println};
+use crate::println;
 
 extern crate alloc;
 
@@ -75,87 +73,212 @@ pub fn primitive_memmapped_fat32_read_only_driver(
     todo!()
 }
 
-#[allow(dead_code)]
-pub fn primitive_memmapped_fat16_read_only_driver(partion_addr: usize, helper: &Helper) {
-    /// this iterator is terribly unsafe, it w
-    struct MaybeUninitIterator<T, const N: usize> {
-        ptr: *const MaybeUninit<T>,
-        count: usize,
-    }
+fn read_directory(dir: Directory, drive: &mut dyn BlockDevice, partion_lba: u64, ebr: &Fat16EBR) {
+    let cluster = dir.cluster();
+    let sector = cluster.first_sector_of_cluster(&ebr.bpb);
 
-    impl<T, const N: usize> MaybeUninitIterator<T, N> {
-        pub const fn new(ptr: *const MaybeUninit<T>) -> Self {
-            Self { ptr, count: 0 }
-        }
-    }
+    let mut entry = [0u8; 512];
 
-    impl<T, const N: usize> Iterator for MaybeUninitIterator<T, N> {
-        type Item = MaybeUninit<T>;
+    drive
+        .read_sectors(u64::from(sector) + partion_lba, 1, &mut entry)
+        .unwrap();
 
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.count < N {
-                let item = unsafe { self.ptr.read_unaligned() };
-                self.ptr = unsafe { self.ptr.add(1) };
-                Some(item)
-            } else {
-                None
+    let entry = unsafe { core::mem::transmute::<[u8; 512], [UnknownEntry; 16]>(entry) };
+
+    let entry = entry[0].get_entry();
+
+    println!("dir entry {entry:?}");
+}
+
+struct Fat16FS {
+    partion_lba: u64,
+    ebr: Fat16EBR,
+    drive: Arc<Mutex<dyn BlockDevice>>,
+}
+
+impl Fat16FS {
+    fn open_dir(&mut self, path: &str) -> Option<Vec<File>> {
+        println!("got path: {path}");
+        // if we are at the root dir
+        let sector: u64 = if path == "/" {
+            println!("root dir");
+            u64::from(self.ebr.bpb.first_date_sector())
+                - u64::from(self.ebr.bpb.get_size_of_root_dir())
+        } else {
+            println!("path: {path}");
+            let slash_index = path.rfind('/').unwrap();
+
+            let dir_path = &path[..=slash_index];
+
+            println!("open dir, with a passed in {path}");
+            let dir = self.open_dir(dir_path).unwrap();
+            println!("opened dir, with a passed in {path}");
+
+            let mut sector = None;
+
+            for file in dir {
+                let path_1 = file.name; //alloc::format!("{}{}", dir_path, file.name);
+                let path_2 = &path[(slash_index + 1)..];
+                println!("path1: {path_1}");
+                println!("path2: {path_2}");
+                if path_1 == path_2 {
+                    if file.metadata.flags.intersects(EntryFlags::Directory) {
+                        sector = Some(
+                            file.metadata
+                                .cluster()
+                                .first_sector_of_cluster(&self.ebr.bpb),
+                        );
+                        break;
+                    }
+
+                    return None;
+                }
             }
-        }
-    }
 
-    let ebr = Fat16EBR::from_addr(partion_addr);
+            u64::from(sector?)
+        };
 
-    assert!(ebr.valid_signature());
+        let mut entry = [0u8; 512];
 
-    let sector = ebr.bpb.first_date_sector() - ebr.bpb.get_size_of_root_dir();
+        self.drive
+            .acquire()
+            .read_sectors(sector + self.partion_lba, 1, &mut entry)
+            .unwrap();
 
-    println!("sector: {sector}");
+        let entry = unsafe { core::mem::transmute::<[u8; 512], [UnknownEntry; 16]>(entry) };
 
-    let root_dir_addr = helper.addr_from_partion_lba(sector.into());
+        let mut files: Vec<File> = Vec::new();
+        let mut long_file_entries: Vec<LongFileName> = Vec::new();
 
-    let entry_ptr = core::ptr::with_exposed_provenance::<MaybeUninit<UnknownEntry>>(root_dir_addr);
+        for entry in entry {
+            // no more entries in cluster
+            if entry.empty() {
+                break;
+            }
 
-    let iter = MaybeUninitIterator::<UnknownEntry, 4>::new(entry_ptr);
-
-    iter.take_while(|entry| unsafe { entry.as_bytes()[0].assume_init() } != 0)
-        .map(|entry| unsafe { entry.assume_init() })
-        .filter_map(|entry| {
             if entry.unused() {
-                None
-            } else {
-                entry.get_entry()
+                long_file_entries.clear();
+                continue;
             }
-        })
-        .filter_map(Either::left)
-        // .for_each(|entry| println!("{entry:#?}"));
-        .filter(|entry| entry.extension == [Char::CapitalT, Char::CapitalX, Char::CapitalT])
-        .map(|text_file| {
-            let cluster = text_file.cluster();
-            println!("cluster: {cluster:?}");
 
-            let sector = cluster.first_sector_of_cluster(&ebr.bpb);
-            println!("sector: {sector:?}");
+            match entry.get_entry() {
+                Some(Right(long_file_name)) => long_file_entries.push(long_file_name),
+                Some(Left(dir)) => {
+                    let name: String = long_file_entries
+                        .iter()
+                        .map(LongFileName::name_as_str)
+                        .collect();
 
-            let sector_addr = helper.addr_from_partion_lba(sector.try_into().unwrap());
-            println!("sector addr: {sector_addr:#?}");
+                    long_file_entries.clear();
 
-            let sector_ptr = core::ptr::with_exposed_provenance::<u8>(sector_addr);
-            let len = text_file.size_in_bytes;
+                    //TODO: smth is wrong here
 
-            println!("sector ptr: {sector_ptr:?}");
+                    // let mut dir_name = dir.name_as_str();
+                    //
+                    // dir_name.push_str(&name);
+                    //
+                    // let temp = Vec::new();
 
-            let slice_ptr = core::ptr::slice_from_raw_parts(sector_ptr, len.try_into().unwrap());
-            let slice = unsafe { slice_ptr.as_ref().unwrap() };
-            // println!("slice: {slice:#?}");
-
-            File {
-                name: text_file.name_as_str(),
-                data: slice,
+                    files.push(File {
+                        name,
+                        metadata: dir,
+                    });
+                }
+                None => todo!(),
             }
-        })
-        .for_each(|file| {
-            println!("name: {}", file.name);
-            let text = str::from_utf8(file.data).unwrap();
-            println!("text: {text}");
-        });
+        }
+
+        Some(files)
+    }
+}
+
+// impl Fat16File {
+//     fn get_files_in_dir(&mut self, path: &str) {
+//         let slash_index = path.rfind('/').unwrap();
+//     }
+// }
+
+impl FileSystem for Fat16FS {
+    fn open(&mut self, path: &str) -> Option<Box<dyn diy_os::filesystem::FileTrait + '_>> {
+        let slash_index = path.rfind('/').unwrap();
+
+        let dir_path = &path[..slash_index];
+
+        let dir = self.open_dir(dir_path).unwrap();
+
+        let mut file_entry = None;
+
+        println!("Looking for file");
+        for file in dir {
+            let path_1 = &file.name;
+            let path_2 = &path[(slash_index + 1)..];
+            println!("file: {file:#?}");
+            println!("path1: {path_1}");
+            println!("path2: {path_2}");
+            if path_1 == path_2 {
+                if file.metadata.flags.intersects(EntryFlags::Directory) {
+                    return None;
+                }
+
+                file_entry = Some(file);
+                break;
+            }
+        }
+        println!("found: {file_entry:?}");
+
+        Some(Box::new(Fat16File {
+            drive: self.drive.clone(),
+            metadata: file_entry?.metadata,
+            ebr: &self.ebr,
+            partion_lba: self.partion_lba,
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct File {
+    name: String,
+    metadata: Directory,
+}
+
+struct Fat16File<'a> {
+    drive: Arc<Mutex<dyn BlockDevice>>,
+    metadata: Directory,
+    ebr: &'a Fat16EBR,
+    partion_lba: u64,
+}
+
+impl FileTrait for Fat16File<'_> {
+    fn read(&self, buf: &mut [u8]) -> Result<usize, diy_os::filesystem::INError> {
+        let sector = self
+            .metadata
+            .cluster()
+            .first_sector_of_cluster(&self.ebr.bpb);
+
+        let () = self
+            .drive
+            .acquire()
+            .read_sectors(u64::from(sector) + self.partion_lba, 1, buf)
+            .unwrap();
+
+        Ok(512)
+    }
+
+    fn write(&mut self, buf: &[u8]) -> Result<usize, diy_os::filesystem::OUTError> {
+        todo!()
+    }
+}
+
+//TODO remove function and inline
+pub fn fat16_read_only(
+    partion_lba: u64,
+    device: Arc<Mutex<dyn BlockDevice>>,
+) -> Box<dyn FileSystem> {
+    let ebr = Fat16EBR::new(&device, partion_lba);
+
+    Box::new(Fat16FS {
+        partion_lba,
+        ebr,
+        drive: device,
+    })
 }

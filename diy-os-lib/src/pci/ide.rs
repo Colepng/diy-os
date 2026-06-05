@@ -1,3 +1,4 @@
+use crate::device_manager::BlockDeviceError;
 use crate::device_manager::DeviceManager;
 use crate::pci::ide::structs::Drive;
 use crate::pci::ide::structs::DriveType;
@@ -53,12 +54,22 @@ impl Device for Drive {
 }
 
 impl BlockDevice for Drive {
-    fn read_sectors(&mut self, lba: u64, count: u8, buffer: &mut [u8]) -> Result<(), Error> {
-        ide_read_sectors(self, count, lba, buffer)
+    fn read_sectors(
+        &mut self,
+        lba: u64,
+        count: u8,
+        buffer: &mut [u8],
+    ) -> Result<(), BlockDeviceError> {
+        Ok(ide_read_sectors(self, count, lba, buffer)?)
     }
 
     #[allow(unused)]
-    fn write_sectors(&mut self, lba: u64, count: u8, buffer: &[u8]) -> Result<(), Error> {
+    fn write_sectors(
+        &mut self,
+        lba: u64,
+        count: u8,
+        buffer: &[u8],
+    ) -> Result<(), BlockDeviceError> {
         todo!()
     }
 
@@ -119,6 +130,16 @@ fn init_channel(mut channel: Channel) -> (Option<Drive>, Option<Drive>) {
         init_drive(&channel, DriveType::Parent),
         init_drive(&channel, DriveType::Child),
     )
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum IdeError {
+    #[error("Controller returned following error `{0:?}`")]
+    ControllerError(structs::ErrRaw),
+    #[error("Drive write failed")]
+    DriveWriteFailed,
+    #[error("Drive not ready for new data")]
+    DriveNotReadyForNewData,
 }
 
 fn init_drive(channel_lock: &Arc<Mutex<Channel>>, drive_type: DriveType) -> Option<Drive> {
@@ -190,7 +211,7 @@ fn ide_read_sectors(
     num_of_sectors: u8,
     lba: u64,
     buffer: &mut [u8],
-) -> Result<(), Error> {
+) -> Result<(), IdeError> {
     assert!((lba + u64::from(num_of_sectors)) <= drive.size);
 
     let lba_0: u8 = (lba & 0xFF).try_into().expect("Should be only one byte"); // byte 1
@@ -250,21 +271,21 @@ fn ide_read_sectors(
     Ok(())
 }
 
-fn poll_ide(channel: &mut Channel) -> Result<(), Error> {
+fn poll_ide(channel: &mut Channel) -> Result<(), IdeError> {
     while channel.get_status_reg().busy() {}
 
     let status = channel.get_status_reg();
 
     if status.error() {
-        bail!("while polling error occured");
+        return Err(IdeError::ControllerError(channel.get_err_reg()));
     }
 
     if status.drive_write_failed() {
-        bail!("drive write failed");
+        return Err(IdeError::DriveWriteFailed);
     }
 
     if !status.data_request_ready() {
-        bail!("drive not ready for new data");
+        return Err(IdeError::DriveNotReadyForNewData);
     }
 
     Ok(())

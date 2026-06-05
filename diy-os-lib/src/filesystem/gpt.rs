@@ -1,6 +1,7 @@
 // reference docs at https://web.archive.org/web/20250610025442/https://uefi.org/specs/UEFI/2.10/05_GUID_Partition_Table_Format.html
 // and https://web.archive.org/web/20250630111613/https://wiki.osdev.org/GPT#Layout and https://web.archive.org/web/20250306133759/http://wiki.osdev.org/Partition_Table
 // wayback machine links incase any content changes or disappears
+use alloc::sync::Arc;
 use core::fmt::Debug;
 use core::hint::assert_unchecked;
 use core::mem::Assume;
@@ -8,6 +9,9 @@ use core::str::FromStr;
 use core::{ascii::Char, mem::TransmuteFrom};
 
 use alloc::string::String;
+
+use crate::device_manager::{BlockDevice, BlockDeviceError};
+use crate::multitasking::mutex::Mutex;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -64,7 +68,31 @@ impl Debug for PartionTableHeader {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum PartionTableHeaderError {
+    #[error("The underlying device ran into an error")]
+    DeviceError(#[from] BlockDeviceError),
+}
+
 impl PartionTableHeader {
+    pub fn from_device(
+        device: Arc<Mutex<dyn BlockDevice>>,
+    ) -> Result<Self, PartionTableHeaderError> {
+        let mut buffer = [0u8; const { core::mem::size_of::<PartionTableHeader>() }];
+
+        let mut device = device.acquire();
+
+        device.read_sectors(1, 1, &mut buffer)?;
+
+        let header = unsafe { core::mem::transmute::<[u8; 92], PartionTableHeader>(buffer) };
+
+        // assert!(header.validate(addr));
+        //
+        // assert!(128 == header.size_of_partion_entry);
+
+        todo!();
+    }
+
     pub fn validate(&self, addr: u64) -> bool {
         let crc32 = self.valid_crc32_checksum();
         let sig = self.signature.valid();
@@ -407,13 +435,6 @@ pub mod mbr {
         unknown: u16,
         pub partion_record: [PartionTableEntry; 4],
         pub signature: u16,
-    }
-
-    impl MBR {
-        /// Crates a new mbr, addr must be the address of a valid mbr
-        pub unsafe fn new(addr: usize) -> MBR {
-            unsafe { core::ptr::with_exposed_provenance::<Self>(addr).read() }
-        }
     }
 
     #[derive(Debug, Clone, Copy)]

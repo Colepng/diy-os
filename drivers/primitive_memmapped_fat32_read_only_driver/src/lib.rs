@@ -4,10 +4,6 @@
 #![feature(never_type)]
 #![feature(ascii_char)]
 #![feature(transmutability)]
-#![feature(maybe_uninit_uninit_array_transpose)]
-#![feature(maybe_uninit_as_bytes)]
-#![feature(ptr_as_uninit)]
-#![feature(ub_checks)]
 #![feature(ascii_char_variants)]
 #![warn(
     clippy::pedantic,
@@ -41,119 +37,77 @@
 mod drivers;
 mod fat;
 
-use core::{cell::OnceCell, fmt};
+use alloc::{boxed::Box, sync::Arc};
 
 use diy_os::{
-    RAMDISK_INFO,
-    filesystem::gpt::{PartionTableHeader, PartitionEntry, mbr::MBR},
-    multitasking::{exit, mutex::Mutex},
+    device_manager::BlockDevice,
+    filesystem::{
+        FileSystem,
+        gpt::{PartionTableHeader, PartitionEntry},
+    },
+    multitasking::mutex::Mutex,
     println,
 };
 
-use crate::fat::{BIOSParameterBlock, Cluseter, FATType};
+use crate::fat::{BIOSParameterBlock, Cluster, FATType};
 
 extern crate alloc;
+//
+// #[cfg(target_os = "none")]
+// pub fn wrapper() {
+//     match fat_setup() {
+//         Err(err) => panic!("{err:?}"),
+//         Ok(_) => unsafe {},
+//     }
+// }
+//
+// #[cfg(not(target_os = "none"))]
+// pub fn wrapper() {
+//     match fat_setup() {
+//         Err(err) => panic!("{err:?}"),
+//         Ok(_) => {}
+//     }
+// }
 
-#[cfg(target_os = "none")]
-pub fn wrapper() {
-    match fat_setup() {
-        Err(err) => panic!("{err:?}"),
-        Ok(_) => unsafe {},
-    }
-}
+pub fn fat_setup(device: Arc<Mutex<dyn BlockDevice>>) -> anyhow::Result<Box<dyn FileSystem>> {
+    let mut sector_buffer = [0u8; 92];
 
-#[cfg(not(target_os = "none"))]
-pub fn wrapper() {
-    match fat_setup() {
-        Err(err) => panic!("{err:?}"),
-        Ok(_) => {}
-    }
-}
+    let mut drive = device.acquire();
 
-struct Helper {
-    base_addr: OnceCell<usize>,
-    partion_lba: OnceCell<usize>,
-}
+    drive.read_sectors(1, 1, &mut sector_buffer)?;
 
-impl Helper {
-    pub const fn new() -> Self {
-        Self {
-            base_addr: OnceCell::new(),
-            partion_lba: OnceCell::new(),
-        }
-    }
+    // let sector_buffer: [u8; 92] = array::from_fn(|x| sector_buffer[x]);
 
-    pub unsafe fn init(&self, base_addr: usize, partion_lba: usize) {
-        self.base_addr.set(base_addr).unwrap();
-        self.partion_lba.set(partion_lba).unwrap();
-    }
+    let header = unsafe { core::mem::transmute::<[u8; 92], PartionTableHeader>(sector_buffer) };
 
-    pub fn addr_from_partion_lba(&self, lba: usize) -> usize {
-        ((lba + self.partion_lba.get().unwrap()) * 512) + self.base_addr.get().unwrap()
-    }
+    println!("header: {header:#?}");
+    //
+    // // assert!(header.validate(addr));
+    //
+    // assert!(128 == header.size_of_partion_entry);
 
-    /// crates some type at the start of a LBA, from the start of the drive
-    pub fn ptr_from_lba<T, N>(&self, lba: N) -> *const T
-    where
-        N: TryInto<usize>,
-        <N as TryInto<usize>>::Error: fmt::Debug,
-    {
-        let addr = lba.try_into().unwrap() + self.base_addr.get().unwrap();
-        core::ptr::with_exposed_provenance(addr)
-    }
+    let mut partion_entry = [0u8; 128];
 
-    /// crates some type at the start of a LBA, from the start of the drive
-    pub fn ptr_from_partion_lba<T, N>(&self, lba: N) -> *const T
-    where
-        N: TryInto<usize>,
-        <N as TryInto<usize>>::Error: fmt::Debug,
-    {
-        let addr = ((lba.try_into().unwrap() + self.partion_lba.get().unwrap()) * 512)
-            + self.base_addr.get().unwrap();
-        core::ptr::with_exposed_provenance(addr)
-    }
-}
+    drive.read_sectors(2, 1, &mut partion_entry)?;
 
-fn fat_setup() -> anyhow::Result<()> {
-    let (addr, _len) = RAMDISK_INFO.with_mut_ref(|info| {
-        let info = info.unwrap();
-        (info.addr, info.len)
-    });
-
-    let helper = Helper::new();
-
-    let ptr = core::ptr::with_exposed_provenance::<MBR>(usize::try_from(addr).unwrap());
-
-    let header_ptr = unsafe { ptr.byte_offset(512) }.cast::<PartionTableHeader>();
-    let header = unsafe { header_ptr.read() };
-
-    println!("header: {:?}", header);
-    println!("addr: {addr}");
-    assert!(header.validate(addr));
-
-    assert!(128 == header.size_of_partion_entry);
-    let partion_entry_lba = header.partion_entry_lba;
-
-    let partion_addr = addr + partion_entry_lba * 512;
-    let partion_ptr: *const PartitionEntry =
-        core::ptr::with_exposed_provenance(partion_addr.try_into().unwrap());
-
-    let partion = unsafe { partion_ptr.read_unaligned() };
+    let partion = unsafe { core::mem::transmute::<[u8; 128], PartitionEntry>(partion_entry) };
 
     // Has not been called yet
-    unsafe { helper.init(addr.try_into()?, partion.starting_lba.try_into()?) };
+    // unsafe { helper.init(addr.try_into()?, partion.starting_lba.try_into()?) };
 
     let name = partion.name().unwrap();
 
     println!("partion {name}, partion {:?}", partion);
+    // println!("fs: {:X}", partion.partion_type_guid);
+    // let fs = partion.get_fs().unwrap();
+    // println!("fs {fs:?}");
+    //
+    // let partion_addr = helper.addr_from_partion_lba(0);
+    let mut bios = [0u8; 36];
 
-    println!("fs: {:X}", partion.partion_type_guid);
-    let fs = partion.get_fs().unwrap();
-    println!("fs {fs:?}");
+    drive.read_sectors(partion.starting_lba, 1, &mut bios)?;
 
-    let partion_addr = helper.addr_from_partion_lba(0);
-
-    let bios = BIOSParameterBlock::from_addr(partion_addr);
+    let bios = unsafe { core::mem::transmute::<[u8; 36], BIOSParameterBlock>(bios) };
 
     println!("bpb : {bios:?}");
 
@@ -161,22 +115,20 @@ fn fat_setup() -> anyhow::Result<()> {
 
     println!("fat type {:?}", fat_type);
 
+    drop(drive);
+
     match fat_type {
         FATType::ExFAT => todo!(),
         FATType::FAT12 => todo!(),
-        FATType::FAT16 => {
-            drivers::primitive_memmapped_fat16_read_only_driver(partion_addr, &helper);
-        }
+        FATType::FAT16 => Ok(drivers::fat16_read_only(partion.starting_lba, device)),
         FATType::FAT32 => {
             todo!()
             // drivers::primitive_memmapped_fat32_read_only_driver(partion_addr, boot_recorded_addr)
         }
     }
-
-    Ok(())
 }
 
-pub fn get_table_value(cluster: Cluseter, bios: &BIOSParameterBlock, partion_addr: u64) -> u32 {
+pub fn get_table_value(cluster: Cluster, bios: &BIOSParameterBlock, partion_addr: u64) -> u32 {
     let mut fat_table: [u32; 128] = [0; 128];
     let offset = cluster.0 * 4;
     let fat_sector = u32::from(bios.reserved_sectors) + (offset / 512);

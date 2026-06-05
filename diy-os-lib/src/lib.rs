@@ -10,8 +10,10 @@
 #![feature(const_convert)]
 #![feature(ascii_char)]
 #![feature(ascii_char_variants)]
+#![feature(int_from_ascii)]
 #![feature(test)] // clippy can't check if test is needed
 #![feature(slice_ptr_get)]
+#![feature(iter_array_chunks)]
 #![deny(fuzzy_provenance_casts)]
 
 use bootloader_api::BootInfo;
@@ -52,13 +54,6 @@ pub struct RamdiskInfo {
     pub addr: u64,
     pub len: u64,
 }
-
-// #[cfg(target_os = "none")]
-// #[cfg(not(test))]
-pub static RAMDISK_INFO: Mutex<Option<RamdiskInfo>> = Mutex::new(None);
-// #[cfg(not(target_os = "none"))]
-// #[cfg(test)]
-// pub static RAMDISK_INFO: std::sync::Mutex<Option<RamdiskInfo>> = std::sync::Mutex::new(None);
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {

@@ -1,5 +1,8 @@
 use core::ascii::Char;
 
+use alloc::sync::Arc;
+use diy_os::{device_manager::BlockDevice, multitasking::mutex::Mutex};
+
 #[derive(Debug)]
 #[repr(C, packed)]
 // rewrite with a sector new type which has a const generics for sector size
@@ -20,10 +23,19 @@ impl ExtenedBootRecord {
         self.signature == 0x28 || self.signature == 0x29
     }
 
-    pub fn from_addr(addr: usize) -> &'static Self {
-        let ptr: *const Self = core::ptr::with_exposed_provenance(addr);
-        // Ptr will always be valid as long as the ramdisk does not move
-        // and does not get unmapped
-        unsafe { ptr.as_ref().unwrap() }
+    pub fn new(device: &Arc<Mutex<dyn BlockDevice>>, partion_lba: u64) -> Self {
+        let mut ebr = [0u8; 512];
+
+        device
+            .acquire()
+            .read_sectors(partion_lba, 1, &mut ebr)
+            .unwrap();
+
+        let ebr = unsafe { core::mem::transmute::<[u8; 512], Self>(ebr) };
+
+        // make sure ebr is good before returning fs
+        assert!(ebr.valid_signature());
+
+        ebr
     }
 }

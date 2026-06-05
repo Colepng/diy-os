@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use core::{
     ascii::Char,
     mem::{Assume, TransmuteFrom},
@@ -42,13 +43,6 @@ pub struct BIOSParameterBlock {
 impl BIOSParameterBlock {
     /// in bytes
     const SIZE_OF_DIR: u16 = 32;
-
-    pub fn from_addr(addr: usize) -> &'static Self {
-        let ptr: *const Self = core::ptr::with_exposed_provenance(addr);
-        // Ptr will always be valid as long as the ramdisk does not move
-        // and does not get unmapped
-        unsafe { ptr.as_ref().unwrap() }
-    }
 
     /// Returns the number of sectors the root dir uses
     pub const fn get_size_of_root_dir(&self) -> u16 {
@@ -102,9 +96,9 @@ impl BIOSParameterBlock {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct Cluseter(pub u32);
+pub struct Cluster(pub u32);
 
-impl Cluseter {
+impl Cluster {
     pub fn first_sector_of_cluster_fat32(
         self,
         boot: &BIOSParameterBlock,
@@ -204,9 +198,9 @@ impl core::fmt::Debug for Date {
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Directory {
-    pub file_name: [u8; 8],
+    pub file_name: [Char; 8],
     pub extension: [Char; 3],
-    flags: u8,
+    pub flags: EntryFlags,
     _reserved: u8,
     creation_time_hund_seconds: u8,
     creation_time: Time,
@@ -219,20 +213,34 @@ pub struct Directory {
     pub size_in_bytes: u32,
 }
 
+bitflags! {
+    // Attributes can be applied to flags types
+    // #[repr(transparent)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct EntryFlags: u8 {
+        const ReadOnly = 0x01;
+        const Hidden = 0x02;
+        const System = 0x04;
+        const VolumeId = 0x08;
+        const Directory = 0x10;
+        const Archive = 0x20;
+    }
+}
+
 impl Directory {
     const _SIZE_CHECK: () = const {
         assert!(size_of::<Self>() == 32);
     };
 
     // submit pr for transmutabitly to use const traits
-    pub fn cluster(&self) -> Cluseter {
-        Cluseter(self.low_2_bytes_of_cluster.into())
+    pub fn cluster(&self) -> Cluster {
+        Cluster(self.low_2_bytes_of_cluster.into())
     }
 
     // submit pr for transmutabitly to use const traits
-    pub fn cluster_fat32(&self) -> Cluseter {
+    pub fn cluster_fat32(&self) -> Cluster {
         unsafe {
-            <Cluseter as TransmuteFrom<[u16; 2], { Assume::SAFETY }>>::transmute([
+            <Cluster as TransmuteFrom<[u16; 2], { Assume::SAFETY }>>::transmute([
                 self.high_2_bytes_of_cluster,
                 self.low_2_bytes_of_cluster,
             ])
@@ -240,7 +248,7 @@ impl Directory {
     }
 
     pub fn name_as_str(&self) -> String {
-        let name = self.file_name.as_ascii().unwrap().as_str().trim();
+        let name = self.file_name.as_str().trim();
         let ext = self.extension.as_str();
         alloc::format!("{name}.{ext}")
     }
@@ -251,19 +259,55 @@ impl Directory {
 pub struct LongFileName {
     letter_offset: u8,
     first_chars: [u16; 5],
-    attribute: u8,
+    flags: EntryFlags,
     long_entry_type: u8,
     checksum_for_short_name: u8,
     next_chars: [u16; 6],
     zeroed: u16,
-    last_charts: [u16; 2],
+    last_chars: [u16; 2],
+}
+
+// Replace with proper handling of 16bit wide chars
+impl LongFileName {
+    pub fn name_as_str(&self) -> String {
+        let first_chars = self.first_chars.map(|char| {
+            if char == 0xFF || char == 0 {
+                Char::Space
+            } else {
+                Char::from_u8(u8::try_from(char).unwrap_or(u8::MAX)).unwrap_or(Char::Space)
+            }
+        });
+
+        let first_chars = first_chars.as_str().trim();
+
+        let next_chars = self.next_chars.map(|char| {
+            if char == 0xFF || char == 0 {
+                Char::Space
+            } else {
+                Char::from_u8(u8::try_from(char).unwrap_or(u8::MAX)).unwrap_or(Char::Space)
+            }
+        });
+
+        let next_chars = next_chars.as_str().trim();
+
+        let last_chars = self.last_chars.map(|char| {
+            if char == 0xFF || char == 0 {
+                Char::Space
+            } else {
+                Char::from_u8(u8::try_from(char).unwrap_or(u8::MAX)).unwrap_or(Char::Space)
+            }
+        });
+
+        let last_chars = last_chars.as_str().trim();
+        alloc::format!("{first_chars}{next_chars}{last_chars}")
+    }
 }
 
 #[derive(Debug)]
 #[repr(C, align(4))]
 pub struct UnknownEntry {
     unknown: [u8; 11],
-    flags: u8,
+    flags: EntryFlags,
     _unknown2: [u8; 16],
     _unused: [u8; 4],
 }
@@ -288,7 +332,9 @@ impl UnknownEntry {
             return None;
         }
 
-        if self.flags == 0x0F {
+        if self.flags
+            == EntryFlags::ReadOnly | EntryFlags::Hidden | EntryFlags::System | EntryFlags::VolumeId
+        {
             Some(Right(*self.as_long_name_unchecked()))
         } else {
             Some(Left(*self.as_directory_unchecked()))

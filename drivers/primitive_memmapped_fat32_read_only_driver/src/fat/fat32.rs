@@ -15,7 +15,7 @@ pub struct ExtenedBootRecord {
     pub(super) size_of_fat_in_sectors: u32,
     flags: u16,
     version: FatVersion,
-    pub cluster_of_root_dir: super::Cluseter,
+    pub cluster_of_root_dir: super::Cluster,
     sector_of_fs_info: u16,
     sector_of_backup_boot: u16,
     _reserved: [u8; 12],

@@ -16,11 +16,10 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-use core::panic::PanicInfo;
+use core::{any::Any, panic::PanicInfo};
 use diy_os::{
-    filesystem::gpt::{PartionTableHeader, PartitionEntry},
-    hlt_loop,
-    RamdiskInfo, device_manager,
+    device_manager,
+    filesystem::VFS,
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, sleep},
@@ -30,7 +29,7 @@ use diy_os::{
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use log::{Level, info, trace};
-use primitive_memmapped_fat32_read_only_driver::wrapper;
+use primitive_memmapped_fat32_read_only_driver::fat_setup;
 use qemu_exit::QEMUExit;
 use refine::Refined;
 use refine::refine_const;
@@ -71,25 +70,36 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
         diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
     });
 
-    if let Some(addr) = boot_info.ramdisk_addr.into_option() {
-        info!("ramdisk start {addr:X}");
-        info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
-
-        let ramdisk_info = RamdiskInfo {
-            addr,
-            len: boot_info.ramdisk_len,
-        };
-
-        diy_os::RAMDISK_INFO.with_mut_ref(|info| info.replace(ramdisk_info));
-
-        wrapper()
-    }
-
     println!("Hello, world!");
 
     let device_manager = device_manager::init_device_manager()?;
 
     device_manager.print_devices();
+
+    // hardcoded for now
+    let device = device_manager.block_devices[1].clone();
+
+    // let mut buffer = [0u8; 92];
+    //
+    // device.acquire().read_sectors(1, 1, &mut buffer)?;
+    //
+    // println!("{buffer:?}");
+    //
+    let file_system = fat_setup(device)?;
+
+    let mut vfs = VFS::new(file_system);
+
+    let file = vfs.open("/door/ads.txt").unwrap();
+
+    let mut buf = [0u8; 100];
+
+    let bytes = file.read(&mut buf).unwrap();
+
+    let text = str::from_utf8(&buf)?;
+
+    println!("text of a.txt: {text:?}");
+    //
+    // panic!("exit");
 
     // for i in 0..=255 {
     //     for j in 0..32 {
