@@ -1,5 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![feature(negative_impls)]
+#![allow(clippy::missing_const_for_fn)]
 
 use core::{
     cell::UnsafeCell,
