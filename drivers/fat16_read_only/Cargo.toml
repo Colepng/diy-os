@@ -1,0 +1,19 @@
+[package]
+name = "fat16_read_only"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+diy-os = { path = "../..//diy-os-lib" }
+anyhow = { version = "1.0.94", default-features = false }
+either = { version = "1.15.0", default-features = false }
+zerocopy = { version = "0.8.48", default-features = false, features = ["zerocopy-derive"] }
+bitflags = "2.11.1"
+bitfield-struct = "0.13.0"
+
+[lib]
+test = false
+bench = false
+
+[lints]
+workspace = true

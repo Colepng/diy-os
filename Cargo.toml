@@ -1,5 +1,5 @@
 [workspace]
-members = ["diy-os", "diy-os-lib", "diy-os-macros", "kernel_logger", "runners", "spinlock"]
+members = ["diy-os", "diy-os-lib", "diy-os-macros", "kernel_logger", "runners", "spinlock", "drivers/fat16_read_only"]
 resolver = "3"
 
 [profile.dev]
@@ -30,6 +30,7 @@ unnecessary_box_returns = "allow"
 linkedlist = "allow"
 uninlined_format_args = "allow"
 struct_field_names = "allow"
+empty_enums = "allow"
 
 [workspace.lints.rust]
 unused_features = "allow" # only for test

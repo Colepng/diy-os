@@ -10,8 +10,10 @@
 #![feature(const_convert)]
 #![feature(ascii_char)]
 #![feature(ascii_char_variants)]
+#![feature(int_from_ascii)]
 #![feature(test)] // clippy can't check if test is needed
 #![feature(slice_ptr_get)]
+#![feature(iter_array_chunks)]
 #![deny(fuzzy_provenance_casts)]
 
 use bootloader_api::BootInfo;
@@ -19,8 +21,6 @@ use log::info;
 use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
-
-use crate::multitasking::mutex::Mutex;
 
 extern crate alloc;
 
@@ -52,8 +52,6 @@ pub struct RamdiskInfo {
     pub addr: u64,
     pub len: u64,
 }
-
-pub static RAMDISK_INFO: Mutex<Option<RamdiskInfo>> = Mutex::new(None);
 
 #[derive(thiserror::Error, Debug)]
 pub enum InitError {
