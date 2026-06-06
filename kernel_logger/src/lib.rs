@@ -1,7 +1,5 @@
 #![no_std]
-#![deny(
-    unsafe_code
-)]
+#![deny(unsafe_code)]
 
 use crate::alloc::string::ToString;
 use log::Level;
