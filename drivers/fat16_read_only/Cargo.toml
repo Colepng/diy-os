@@ -10,6 +10,7 @@ either = { version = "1.15.0", default-features = false }
 zerocopy = { version = "0.8.48", default-features = false, features = ["zerocopy-derive"] }
 bitflags = "2.11.1"
 bitfield-struct = "0.13.0"
+log = "0.4.32"
 
 [lib]
 test = false

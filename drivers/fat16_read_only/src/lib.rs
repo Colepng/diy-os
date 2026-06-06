@@ -58,11 +58,11 @@ pub fn fat_setup(
 
     drive.read_sectors(partion.starting_lba.get(), 1, bios.as_mut_bytes())?;
 
-    println!("bpb : {bios:?}");
+    log::debug!("bpb : {bios:?}");
 
     let fat_type = bios.get_fat_type();
 
-    println!("fat type {:?}", fat_type);
+    log::debug!("fat type {:?}", fat_type);
 
     drop(drive);
 

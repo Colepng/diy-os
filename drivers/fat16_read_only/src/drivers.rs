@@ -11,7 +11,6 @@ use diy_os::multitasking::mutex::Mutex;
 use either::Either::{Left, Right};
 
 use crate::fat::fat16::ExtenedBootRecord as Fat16EBR;
-use crate::println;
 
 extern crate alloc;
 
@@ -23,29 +22,29 @@ struct Fat16FS {
 
 impl Fat16FS {
     fn open_dir(&mut self, path: &str) -> Option<Vec<File>> {
-        println!("got path: {path}");
+        log::trace!("got path: {path}");
         // if we are at the root dir
         let sector: u64 = if path == "/" {
-            println!("root dir");
+            log::trace!("root dir");
             u64::from(self.ebr.bpb.first_date_sector())
                 - u64::from(self.ebr.bpb.get_size_of_root_dir())
         } else {
-            println!("path: {path}");
+            log::trace!("path: {path}");
             let slash_index = path.rfind('/').unwrap();
 
             let dir_path = &path[..=slash_index];
 
-            println!("open dir, with a passed in {path}");
+            log::trace!("open dir, with a passed in {path}");
             let dir = self.open_dir(dir_path).unwrap();
-            println!("opened dir, with a passed in {path}");
+            log::trace!("opened dir, with a passed in {path}");
 
             let mut sector = None;
 
             for file in dir {
                 let path_1 = file.name; //alloc::format!("{}{}", dir_path, file.name);
                 let path_2 = &path[(slash_index + 1)..];
-                println!("path1: {path_1}");
-                println!("path2: {path_2}");
+                log::trace!("path1: {path_1}");
+                log::trace!("path2: {path_2}");
                 if path_1 == path_2 {
                     if file.metadata.flags.intersects(EntryFlags::Directory) {
                         sector = Some(
@@ -133,13 +132,13 @@ impl FileSystem for Fat16FS {
 
         let mut file_entry = None;
 
-        println!("Looking for file");
+        log::trace!("Looking for file");
         for file in dir {
             let path_1 = &file.name;
             let path_2 = &path[(slash_index + 1)..];
-            println!("file: {file:#?}");
-            println!("path1: {path_1}");
-            println!("path2: {path_2}");
+            log::trace!("file: {file:#?}");
+            log::trace!("path1: {path_1}");
+            log::trace!("path2: {path_2}");
             if path_1 == path_2 {
                 if file.metadata.flags.intersects(EntryFlags::Directory) {
                     return None;
@@ -149,7 +148,7 @@ impl FileSystem for Fat16FS {
                 break;
             }
         }
-        println!("found: {file_entry:?}");
+        log::trace!("found: {file_entry:?}");
 
         Some(Box::new(Fat16File {
             drive: self.drive.clone(),

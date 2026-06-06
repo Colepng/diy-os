@@ -78,8 +78,6 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     let device_manager = device_manager::init_device_manager()?;
 
-    device_manager.print_devices();
-
     // hardcoded for now
     let device = device_manager.block_devices[1].clone();
 
@@ -330,7 +328,7 @@ pub fn setup_filesystem(
         if partion.partion_type_guid.get() != 0 {
             let name = partion.name().unwrap();
 
-            crate::println!("partion {name}, partion {:?}", partion);
+            log::debug!("partion {name}, partion {:?}", partion);
         }
     }
 
