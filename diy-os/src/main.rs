@@ -8,21 +8,25 @@
 #![test_runner(diy_os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use zerocopy::FromBytes;
 extern crate alloc;
 
-use alloc::string::String;
+use alloc::{boxed::Box, string::String, sync::Arc};
 use bootloader_api::{
     BootInfo, BootloaderConfig,
     config::{Mapping, Mappings},
     entry_point,
 };
-use core::{any::Any, panic::PanicInfo};
+use core::panic::PanicInfo;
 use diy_os::{
-    device_manager,
-    filesystem::VFS,
+    device_manager::{self, BlockDevice},
+    filesystem::{
+        FileSystem, FileSystemSetupError, VFS,
+        gpt::{self, PartionTableHeader, PartitionEntry},
+    },
     human_input_devices::{STDIN, process_keys},
     kernel_early,
-    multitasking::{SCHEDULER, Task, sleep},
+    multitasking::{SCHEDULER, Task, mutex::Mutex, sleep},
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
@@ -53,7 +57,7 @@ entry_point!(main_wrapper, config = &BOOTLOADER_CONFIG);
 #[unsafe(no_mangle)]
 extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
     match main(boot_info) {
-        Err(err) => panic!("{err:?}"),
+        Err(err) => panic!("{err:#?}"),
     }
 }
 
@@ -61,7 +65,7 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let frequency = refine_const!(1000u32, PitFrequency);
-    let (boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
+    let (_boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
     info!("start_address {:X}", 0x0000_0000_0804_aff8);
     info!("start_address {:X}", 0x0000_0000_0804_aff8 + 4000 * 3);
@@ -79,21 +83,15 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     // hardcoded for now
     let device = device_manager.block_devices[1].clone();
 
-    // let mut buffer = [0u8; 92];
-    //
-    // device.acquire().read_sectors(1, 1, &mut buffer)?;
-    //
-    // println!("{buffer:?}");
-    //
-    let file_system = fat_setup(device)?;
+    let fs = setup_filesystem(&device)?;
 
-    let mut vfs = VFS::new(file_system);
+    let mut vfs = VFS::new(fs);
 
     let file = vfs.open("/door/ads.txt").unwrap();
 
     let mut buf = [0u8; 100];
 
-    let bytes = file.read(&mut buf).unwrap();
+    let _ = file.read(&mut buf).unwrap();
 
     let text = str::from_utf8(&buf)?;
 
@@ -286,6 +284,61 @@ fn rsp() -> u64 {
     unsafe { core::arch::asm!("mov {stack}, rsp", stack = out(reg) rsp) }
 
     rsp
+}
+/// Reads the GPT from `device`, parses the partition table, and mounts the
+/// filesystem on the first partition.
+///
+/// Returns a boxed [`FileSystem`] for the mounted partition.
+///
+/// # Errors
+///
+/// Returns [`FileSystemSetupError`] if:
+/// - the GPT header is missing, corrupt, or fails CRC validation
+/// - the device read fails
+/// - the partition's filesystem driver fails to mount
+///
+pub fn setup_filesystem(
+    device: &Arc<Mutex<dyn BlockDevice>>,
+) -> Result<Box<dyn FileSystem>, FileSystemSetupError> {
+    let header = PartionTableHeader::from_device(device)?;
+
+    // Currently only 128 sized partition entries are implemented
+    assert_eq!(128, header.size_of_partion_entry);
+
+    let array_size = usize::try_from(header.size_of_partion_entry)
+        .unwrap()
+        .checked_mul(usize::try_from(header.num_of_partions).unwrap())
+        .unwrap();
+
+    let mut buffer = alloc::vec![0u8; array_size];
+
+    {
+        let mut drive = device.acquire();
+
+        let sector_size = drive.sector_size();
+
+        drive.read_sectors(
+            header.partion_entry_lba,
+            u8::try_from(array_size.div_ceil(sector_size)).unwrap(),
+            &mut buffer,
+        )?;
+    }
+
+    let entries = <[PartitionEntry]>::ref_from_bytes(&buffer).unwrap();
+
+    for partion in entries {
+        if partion.partion_type_guid.get() != 0 {
+            let name = partion.name().unwrap();
+
+            crate::println!("partion {name}, partion {:?}", partion);
+        }
+    }
+
+    match entries[0].get_fs().unwrap() {
+        gpt::FSGuid::SimpleFileSystem => todo!(),
+        gpt::FSGuid::MicrosoftData => Ok(fat_setup(device.clone(), &entries[0])?),
+        _ => todo!(),
+    }
 }
 
 /// This function is called on panic.

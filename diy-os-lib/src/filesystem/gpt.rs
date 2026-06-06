@@ -5,151 +5,166 @@ use alloc::sync::Arc;
 use core::fmt::Debug;
 use core::hint::assert_unchecked;
 use core::mem::Assume;
+use core::mem::TransmuteFrom;
+use core::mem::offset_of;
 use core::str::FromStr;
-use core::{ascii::Char, mem::TransmuteFrom};
+use crc32fast::Hasher;
+use zerocopy::little_endian::{U16, U32, U64, U128};
+use zerocopy::{FromBytes, Immutable, IntoBytes, Unaligned};
+use zerocopy::{FromZeros, KnownLayout};
 
 use alloc::string::String;
 
 use crate::device_manager::{BlockDevice, BlockDeviceError};
 use crate::multitasking::mutex::Mutex;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
-#[repr(C, packed)]
+#[derive(Debug, KnownLayout, Immutable, Unaligned, FromBytes, IntoBytes)]
+#[repr(C)]
+pub struct PartionTableHeaderRaw {
+    pub signature: [u8; 8],
+    gpt_revison: U32,
+    header_size: U32,
+    crc32_checksum: U32,
+    reserved: U32,
+    lba_table_header: U64,
+    lba_alt_table_header: U64,
+    first_usable_logical_block: U64,
+    last_usable_logical_block: U64,
+    disk_guid: U128,
+    pub partion_entry_lba: U64,
+    pub num_of_partions: U32,
+    pub size_of_partition_entry: U32,
+    crc32_partion_entry_array: U32,
+}
+#[derive(Debug)]
 // should add ending reserved fields
+#[non_exhaustive]
 pub struct PartionTableHeader {
-    pub signature: Signature,
-    gpt_revison: u32,
-    header_size: u32,
-    crc32_checksum: u32,
-    reserved: u32,
-    lba_table_header: u64,
-    lba_alt_table_header: u64,
-    first_usable_logical_block: u64,
-    last_usable_logical_block: u64,
-    disk_guid: u128,
+    pub lba_table_header: u64,
+    pub lba_alt_table_header: u64,
+    pub first_usable_logical_block: u64,
+    pub last_usable_logical_block: u64,
+    pub disk_guid: u128,
     pub partion_entry_lba: u64,
     pub num_of_partions: u32,
     pub size_of_partion_entry: u32,
-    crc32_partion_entry_array: u32,
-}
-
-impl Debug for PartionTableHeader {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let gpt_revison = self.gpt_revison;
-        let header_size = self.header_size;
-        let crc32_checksum = self.crc32_checksum;
-        let reserved = self.reserved;
-        let lba_table_header = self.lba_table_header;
-        let lba_alt_table_header = self.lba_alt_table_header;
-        let first_usable_logical_block = self.first_usable_logical_block;
-        let last_usable_logical_block = self.last_usable_logical_block;
-        let disk_guid = self.disk_guid;
-        let partion_entry_lba = self.partion_entry_lba;
-        let num_of_partions = self.num_of_partions;
-        let size_of_partion_entry = self.size_of_partion_entry;
-        let crc32_partion_entry_array = self.crc32_partion_entry_array;
-        f.debug_struct("Partion Table Header")
-            .field("signature", &self.signature)
-            .field("gpt_revison", &gpt_revison)
-            .field("header_size", &header_size)
-            .field("crc32_checksum", &crc32_checksum)
-            .field("reserved", &reserved)
-            .field("lba_table_header", &lba_table_header)
-            .field("lba_alt_table_header", &lba_alt_table_header)
-            .field("first_usable_logical_block", &first_usable_logical_block)
-            .field("last_usable_logical_block", &last_usable_logical_block)
-            .field("disk_guid", &disk_guid)
-            .field("partion_entry_lba", &partion_entry_lba)
-            .field("num_of_partions", &num_of_partions)
-            .field("size_of_partion_entry", &size_of_partion_entry)
-            .field("crc32_partion_entry_array", &crc32_partion_entry_array)
-            .finish()
-    }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum PartionTableHeaderError {
     #[error("The underlying device ran into an error")]
     DeviceError(#[from] BlockDeviceError),
+    #[error("Invalid signature, received")]
+    InvalidSignature([u8; 8]),
+    #[error("Invalid crc32 header checksum expected: `{expected}` but calculated `{calculated}`")]
+    InvalidCrc32HeaderChecksum { expected: u32, calculated: u32 },
+    #[error(
+        "Invalid crc32 partion entries checksum expected: `{expected}` but calculated `{calculated}`"
+    )]
+    InvalidCrc32PartionEntriesChecksum { expected: u32, calculated: u32 },
 }
 
 impl PartionTableHeader {
+    /// Reads and validates the GPT partition table header from `device`.
+    ///
+    /// Reads LBA 1, checks the `"EFI PART"` signature, validates the header CRC32
+    /// (computed with the CRC field zeroed), then reads and validates the partition
+    /// entry array CRC32.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PartionTableHeaderError`] if:
+    /// - the underlying device read fails
+    /// - the GPT signature is missing or wrong
+    /// - either the header or partition entry array CRC fails to match
     pub fn from_device(
-        device: Arc<Mutex<dyn BlockDevice>>,
+        device: &Arc<Mutex<dyn BlockDevice>>,
     ) -> Result<Self, PartionTableHeaderError> {
-        let mut buffer = [0u8; const { core::mem::size_of::<PartionTableHeader>() }];
+        let mut header = PartionTableHeaderRaw::new_zeroed();
 
-        let mut device = device.acquire();
+        {
+            let mut drive = device.acquire();
 
-        device.read_sectors(1, 1, &mut buffer)?;
-
-        let header = unsafe { core::mem::transmute::<[u8; 92], PartionTableHeader>(buffer) };
-
-        // assert!(header.validate(addr));
-        //
-        // assert!(128 == header.size_of_partion_entry);
-
-        todo!();
-    }
-
-    pub fn validate(&self, addr: u64) -> bool {
-        let crc32 = self.valid_crc32_checksum();
-        let sig = self.signature.valid();
-        let crc32_partions = self.valid_partion_array(addr);
-
-        if self.lba_table_header == 1 {
-            crc32 && sig && crc32_partions && self.valid_self_lba() && self.valid_last_lba(addr)
-        } else {
-            crc32 && sig && crc32_partions
+            drive.read_sectors(1, 1, header.as_mut_bytes())?;
         }
-    }
 
-    fn valid_crc32_checksum(&self) -> bool {
-        let mut copy = *self;
-        let checksum = self.crc32_checksum;
+        if *b"EFI PART" != header.signature {
+            return Err(PartionTableHeaderError::InvalidSignature(header.signature));
+        }
 
-        copy.crc32_checksum = 0;
-        // Safe to transmute since the transmute from validates all conditions
-        let bytes = unsafe { <[u8; size_of::<Self>()] as TransmuteFrom<Self>>::transmute(copy) };
-        let hash = crc32fast::hash(&bytes);
+        // Validate partition header checksum
+        let mut hasher = Hasher::new();
+        let bytes = header.as_bytes();
 
-        hash == checksum
-    }
-
-    /// Actually implement this, rn assuming it's in lba 1
-    const fn valid_self_lba(&self) -> bool {
-        self.lba_table_header == 1
-    }
-
-    fn valid_last_lba(&self, addr_of_memmaped_drive: u64) -> bool {
-        let ptr_to_alt: *const Self = core::ptr::with_exposed_provenance(
-            // assuming block/sector size is 512 bytes
-            usize::try_from(addr_of_memmaped_drive + (512 * self.lba_alt_table_header)).unwrap(),
+        // Relies on the order of field to compute checksum
+        hasher.update(&bytes[0..const { offset_of!(PartionTableHeaderRaw, crc32_checksum) }]);
+        hasher.update(
+            &[0u8; const {
+                offset_of!(PartionTableHeaderRaw, reserved)
+                    - offset_of!(PartionTableHeaderRaw, crc32_checksum)
+            }],
         );
+        hasher.update(&bytes[const { offset_of!(PartionTableHeaderRaw, reserved) }..]);
 
-        let alt_header = unsafe { *ptr_to_alt };
+        let hash = hasher.finalize();
 
-        alt_header.validate(addr_of_memmaped_drive)
-    }
+        if hash != header.crc32_checksum.get() {
+            return Err(PartionTableHeaderError::InvalidCrc32HeaderChecksum {
+                expected: header.crc32_checksum.get(),
+                calculated: hash,
+            });
+        }
 
-    fn valid_partion_array(&self, addr_of_memmaped_drive: u64) -> bool {
-        let checksum = self.crc32_partion_entry_array;
-        let addr = addr_of_memmaped_drive + (self.partion_entry_lba * 512);
+        // Validate partition entries checksum
+        let array_size = usize::try_from(header.size_of_partition_entry.get())
+            .unwrap()
+            .checked_mul(usize::try_from(header.num_of_partions.get()).unwrap())
+            .unwrap();
 
-        // assuming block/sector size is 512 bytes
-        let ptr_to_start: *const u8 =
-            core::ptr::with_exposed_provenance(usize::try_from(addr).unwrap());
-        crate::println!("addr: {addr:?}");
-        let bytes = core::ptr::slice_from_raw_parts(
-            ptr_to_start,
-            usize::try_from(self.size_of_partion_entry * self.num_of_partions).unwrap(),
-        );
-        let bytes = unsafe { bytes.as_ref().unwrap() };
+        let mut buffer = alloc::vec![0u8; array_size];
 
-        let hash = crc32fast::hash(bytes);
+        {
+            let mut drive = device.acquire();
 
-        checksum == hash
+            let sector_size = drive.sector_size();
+
+            drive.read_sectors(
+                header.partion_entry_lba.get(),
+                u8::try_from(array_size.div_ceil(sector_size)).unwrap(),
+                &mut buffer,
+            )?;
+
+            let hash = crc32fast::hash(buffer.as_bytes());
+
+            if hash != header.crc32_partion_entry_array.get() {
+                return Err(
+                    PartionTableHeaderError::InvalidCrc32PartionEntriesChecksum {
+                        expected: header.crc32_partion_entry_array.get(),
+                        calculated: hash,
+                    },
+                );
+            }
+        }
+
+        // TODO: FIx
+        // Check if current header is alt or not
+        // if header.lba_table_header.get() == 1 {
+        //     // If it successfully returns the header must be valid
+        //     let _ = Self::from_device(device, true)?;
+        // }
+
+        // TODO validate self lba?? lowkey forget what this is been way too long
+
+        Ok(Self {
+            lba_table_header: header.lba_table_header.get(),
+            lba_alt_table_header: header.lba_alt_table_header.get(),
+            first_usable_logical_block: header.first_usable_logical_block.get(),
+            last_usable_logical_block: header.last_usable_logical_block.get(),
+            disk_guid: header.disk_guid.get(),
+            partion_entry_lba: header.partion_entry_lba.get(),
+            num_of_partions: header.num_of_partions.get(),
+            size_of_partion_entry: header.size_of_partition_entry.get(),
+        })
     }
 }
 
@@ -158,7 +173,7 @@ impl PartionTableHeader {
 #[non_exhaustive]
 pub enum FSGuid {
     SimpleFileSystem = 0x5346_5353_4653_061A_450C_11BF_4EBF_0E06,
-    FAT32 = 0xC799_26B7_B668_C087_4433_B9E5_EBD0_A0A2,
+    MicrosoftData = 0xC799_26B7_B668_C087_4433_B9E5_EBD0_A0A2,
 }
 
 #[derive(Debug)]
@@ -364,32 +379,32 @@ impl TryFrom<u128> for FSGuid {
     fn try_from(value: u128) -> Result<Self, Self::Error> {
         match value {
             val if val == Self::SimpleFileSystem as u128 => Ok(Self::SimpleFileSystem),
-            val if val == Self::FAT32 as u128 => Ok(Self::FAT32),
+            val if val == Self::MicrosoftData as u128 => Ok(Self::MicrosoftData),
             _ => Err("Can't find filesystem with that guid"),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, FromBytes, IntoBytes, KnownLayout, Immutable, Unaligned)]
 #[repr(C)]
 // should add ending reserved fields
 pub struct PartitionEntry {
     // option optimization should make this that any non defined variant is none
     // to test theroy I will edit this freely as a int thru ptr
-    pub partion_type_guid: u128,
-    pub unique_partion_guid: u128,
-    pub starting_lba: u64,
-    pub ending_lba: u64,
-    pub attributes: u64,
+    pub partion_type_guid: U128,
+    pub unique_partion_guid: U128,
+    pub starting_lba: U64,
+    pub ending_lba: U64,
+    pub attributes: U64,
     /// uft 16
     /// TODO: don't hardcode length some implementations have it go beyond 36
-    pub partion_name: [u16; 36],
+    pub partion_name: [U16; 36],
 }
 
 impl PartitionEntry {
     pub fn name(&self) -> Option<String> {
         // assumes little endian hardware
-        String::from_utf16(&self.partion_name).ok()
+        String::from_utf16(&self.partion_name.map(U16::get)).ok()
     }
 
     /// Returns the get fs of this [`PartitionEntry`].
@@ -399,31 +414,7 @@ impl PartitionEntry {
     /// This function will return an error if the `partion_type_guid` field
     /// does not contain a known file system
     pub fn get_fs(&self) -> Result<FSGuid, &'static str> {
-        FSGuid::try_from(self.partion_type_guid)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Signature {
-    chars: [Char; 8],
-}
-
-impl Signature {
-    const VALID: Self = Self {
-        chars: [
-            Char::CapitalE,
-            Char::CapitalF,
-            Char::CapitalI,
-            Char::Space,
-            Char::CapitalP,
-            Char::CapitalA,
-            Char::CapitalR,
-            Char::CapitalT,
-        ],
-    };
-
-    pub fn valid(&self) -> bool {
-        self.chars == Self::VALID.chars
+        FSGuid::try_from(self.partion_type_guid.get())
     }
 }
 

@@ -22,8 +22,6 @@ use memory::BootInfoFrameAllocator;
 use timer::SystemTimerError;
 use x86_64::structures::paging::{OffsetPageTable, Size4KiB, mapper::MapToError};
 
-use crate::multitasking::mutex::Mutex;
-
 extern crate alloc;
 
 #[cfg(not(test))]

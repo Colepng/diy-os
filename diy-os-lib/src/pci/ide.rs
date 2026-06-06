@@ -9,8 +9,6 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::ascii::Char;
 
-use anyhow::{Error, bail};
-
 use crate::device_manager::BlockDevice;
 use crate::multitasking::mutex::Mutex;
 use crate::pci::ide::structs::HddSelect;
