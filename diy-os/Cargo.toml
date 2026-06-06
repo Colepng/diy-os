@@ -17,7 +17,7 @@ kernel_logger = { version = "0.1.0", path = "../kernel_logger" }
 refine = { git = "https://github.com/Colepng/Refinement-types" }
 diy-os = { path = "../diy-os-lib" }
 qemu-exit = "3.0.2"
-primitive_memmapped_fat32_read_only_driver = { path = "../drivers/primitive_memmapped_fat32_read_only_driver/" }
+fat16_read_only = { path = "../drivers/fat16_read_only/" }
 zerocopy = { version = "0.8.50", default-features = false, features = ["derive"] }
 
 [[bin]]

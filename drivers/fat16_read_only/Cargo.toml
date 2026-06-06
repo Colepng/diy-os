@@ -1,5 +1,5 @@
 [package]
-name = "primitive_memmapped_fat32_read_only_driver"
+name = "fat16_read_only"
 version = "0.1.0"
 edition = "2024"
 

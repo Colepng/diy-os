@@ -32,8 +32,8 @@ use diy_os::{
     ps2::devices::ps2_device_1_task,
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
+use fat16_read_only::fat_setup;
 use log::{Level, info, trace};
-use primitive_memmapped_fat32_read_only_driver::fat_setup;
 use qemu_exit::QEMUExit;
 use refine::Refined;
 use refine::refine_const;

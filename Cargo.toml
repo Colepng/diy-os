@@ -1,5 +1,5 @@
 [workspace]
-members = ["diy-os", "diy-os-lib", "diy-os-macros", "kernel_logger", "runners", "spinlock", "drivers/primitive_memmapped_fat32_read_only_driver"]
+members = ["diy-os", "diy-os-lib", "diy-os-macros", "kernel_logger", "runners", "spinlock", "drivers/fat16_read_only"]
 resolver = "3"
 
 [profile.dev]
