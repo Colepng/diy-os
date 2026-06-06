@@ -14,3 +14,6 @@ bitfield-struct = "0.13.0"
 [lib]
 test = false
 bench = false
+
+[lints]
+workspace = true

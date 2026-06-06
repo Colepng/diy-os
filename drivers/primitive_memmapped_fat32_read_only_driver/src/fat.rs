@@ -3,6 +3,10 @@ use core::{
     ascii::Char,
     mem::{Assume, TransmuteFrom},
 };
+use zerocopy::{
+    FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned,
+    little_endian::{U16, U32},
+};
 
 use alloc::string::String;
 use either::Either::{self, Left, Right};
@@ -20,24 +24,24 @@ pub enum FATType {
     FAT32,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable, Unaligned, KnownLayout)]
+#[repr(C)]
 pub struct BIOSParameterBlock {
     _start_code: [u8; 3],
-    pub oem_id: [Char; 8],
-    pub bytes_per_sec: u16,
+    pub oem_id: [u8; 8],
+    pub bytes_per_sec: U16,
     pub sectors_per_cluster: u8,
-    pub reserved_sectors: u16,
+    pub reserved_sectors: U16,
     pub number_of_fats: u8,
-    number_of_roots: u16,
-    total_sectors: u16,
-    media_descripter: u8,
-    pub number_of_sectors_per_fat: u16,
-    number_of_sectors_per_track: u16,
-    number_of_heads: u16,
-    /// the lba at the start of partitio
-    pub number_of_hidden_sectors: u32,
-    large_sector_count: u32,
+    pub number_of_roots: U16,
+    pub total_sectors: U16,
+    pub media_descripter: u8,
+    pub number_of_sectors_per_fat: U16,
+    pub number_of_sectors_per_track: U16,
+    pub number_of_heads: U16,
+    /// the lba at the start of partition
+    pub number_of_hidden_sectors: U32,
+    pub large_sector_count: U32,
 }
 
 impl BIOSParameterBlock {
@@ -46,7 +50,7 @@ impl BIOSParameterBlock {
 
     /// Returns the number of sectors the root dir uses
     pub const fn get_size_of_root_dir(&self) -> u16 {
-        (self.number_of_roots * Self::SIZE_OF_DIR).div_ceil(self.bytes_per_sec)
+        (self.number_of_roots.get() * Self::SIZE_OF_DIR).div_ceil(self.bytes_per_sec.get())
     }
 
     fn get_num_of_data_sectors(&self) -> u32 {
@@ -58,16 +62,16 @@ impl BIOSParameterBlock {
             self.total_sectors.into()
         };
 
-        let used_sectors: u16 = self.reserved_sectors
-            + u16::from(self.number_of_fats) * self.number_of_sectors_per_fat
+        let used_sectors: u16 = self.reserved_sectors.get()
+            + u16::from(self.number_of_fats) * self.number_of_sectors_per_fat.get()
             + self.get_size_of_root_dir();
 
-        total_sectors - u32::from(used_sectors)
+        total_sectors.get() - u32::from(used_sectors)
     }
 
     pub fn first_date_sector(&self) -> u16 {
-        self.reserved_sectors
-            + (u16::from(self.number_of_fats) * self.number_of_sectors_per_fat)
+        self.reserved_sectors.get()
+            + (u16::from(self.number_of_fats) * self.number_of_sectors_per_fat.get())
             + self.get_size_of_root_dir()
     }
 
@@ -141,6 +145,7 @@ impl core::fmt::Debug for Time {
 
 #[repr(u16)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Month {
     January = 1,
     February = 2,
@@ -238,6 +243,7 @@ impl Directory {
     }
 
     // submit pr for transmutabitly to use const traits
+    #[allow(dead_code)]
     pub fn cluster_fat32(&self) -> Cluster {
         unsafe {
             <Cluster as TransmuteFrom<[u16; 2], { Assume::SAFETY }>>::transmute([
@@ -247,6 +253,7 @@ impl Directory {
         }
     }
 
+    #[allow(dead_code)]
     pub fn name_as_str(&self) -> String {
         let name = self.file_name.as_str().trim();
         let ext = self.extension.as_str();

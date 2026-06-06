@@ -1,4 +1,4 @@
-use crate::fat::{Cluster, Directory, EntryFlags, LongFileName, Sector, UnknownEntry};
+use crate::fat::{Directory, EntryFlags, LongFileName, Sector};
 use core::str;
 
 use alloc::boxed::Box;
@@ -11,84 +11,9 @@ use diy_os::multitasking::mutex::Mutex;
 use either::Either::{Left, Right};
 
 use crate::fat::fat16::ExtenedBootRecord as Fat16EBR;
-use crate::fat::fat32::ExtenedBootRecord as Fat32EBR;
 use crate::println;
 
 extern crate alloc;
-
-pub fn primitive_memmapped_fat32_read_only_driver(
-    partion_addr: u64,
-    boot_recorded_addr: usize,
-) -> anyhow::Result<!> {
-    let fat32_table = Fat32EBR::from_addr(boot_recorded_addr);
-
-    assert!(fat32_table.valid_signature());
-
-    println!("ebr 32: {fat32_table:?}");
-
-    // let sectors =
-    // get_entire_slice_from_cluster(fat32_table.cluster_of_root_dir, bios, partion_addr);
-
-    let cluster = fat32_table.cluster_of_root_dir;
-
-    println!("root cluster: {cluster:?}");
-
-    let sector = cluster.first_sector_of_cluster_fat32(&fat32_table.bpb, fat32_table);
-
-    println!("sector: {sector}");
-
-    let addr = partion_addr + u64::from(sector * 512);
-
-    // [u32; 128] is equal to a sector size, 512 bytes
-    let ptr: *const UnknownEntry = core::ptr::without_provenance(usize::try_from(addr).unwrap());
-
-    let sector = unsafe { ptr.read() };
-
-    println!("{:?}", sector);
-
-    // for entry in sector.0.iter() {
-    //     println!("{}", entry.empty());
-    // }
-
-    // let table_value = get_table_value(fat32_table.cluster_of_root_dir, bios, addr);
-    //
-    // if table_value >= 0x0FFF_FFF8 {
-    //     println!("out of clusters in chain");
-    // } else if table_value == 0x0FFF_FFF7 {
-    //     println!("bad cluster");
-    // } else {
-    //     println!("next cluster {table_value:X}");
-    // }
-
-    // for sector in sectors {
-    //     for entry in sector.0.iter() {
-    //         if !entry.empty() {
-    //             println!("entry: {:#?}", entry);
-    //         }
-    //     }
-    // }
-
-    // SAFETY: Scheduler is not held
-    // unsafe { exit() };
-    todo!()
-}
-
-fn read_directory(dir: Directory, drive: &mut dyn BlockDevice, partion_lba: u64, ebr: &Fat16EBR) {
-    let cluster = dir.cluster();
-    let sector = cluster.first_sector_of_cluster(&ebr.bpb);
-
-    let mut entry = [0u8; 512];
-
-    drive
-        .read_sectors(u64::from(sector) + partion_lba, 1, &mut entry)
-        .unwrap();
-
-    let entry = unsafe { core::mem::transmute::<[u8; 512], [UnknownEntry; 16]>(entry) };
-
-    let entry = entry[0].get_entry();
-
-    println!("dir entry {entry:?}");
-}
 
 struct Fat16FS {
     partion_lba: u64,
@@ -145,12 +70,12 @@ impl Fat16FS {
             .read_sectors(sector + self.partion_lba, 1, &mut entry)
             .unwrap();
 
-        let entry = unsafe { core::mem::transmute::<[u8; 512], [UnknownEntry; 16]>(entry) };
+        let entry = unsafe { core::mem::transmute::<[u8; 512], Sector>(entry) };
 
         let mut files: Vec<File> = Vec::new();
         let mut long_file_entries: Vec<LongFileName> = Vec::new();
 
-        for entry in entry {
+        for entry in entry.0 {
             // no more entries in cluster
             if entry.empty() {
                 break;
@@ -264,7 +189,7 @@ impl FileTrait for Fat16File<'_> {
         Ok(512)
     }
 
-    fn write(&mut self, buf: &[u8]) -> Result<usize, diy_os::filesystem::OUTError> {
+    fn write(&mut self, _buf: &[u8]) -> Result<usize, diy_os::filesystem::OUTError> {
         todo!()
     }
 }
