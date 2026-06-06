@@ -51,13 +51,14 @@ use x86_64::{
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
-    let mut mappings = Mappings::new_default();
-    mappings.physical_memory = Some(Mapping::FixedAddress(P_OFFSET));
+    config.mappings.physical_memory = Some(Mapping::FixedAddress(P_OFFSET));
+    config.mappings.kernel_stack = Mapping::FixedAddress(0xFFFF_B000_0000_0000);
+    config.mappings.dynamic_range_start = Some(0xFFFF_D000_0000_0000);
+    config.mappings.dynamic_range_end = Some(0xFFFF_FFFF_FFFF_FFFF);
     // 64 TB mapping ends at 0xffffc00000000000 - 1
     // another tb for continuous memory, for now only heap at 0xffffc00000000000
     // another tb for quick and dirty stacks at 0xffffc10000000000
     // the rest will be free to the virtual memory allacator
-    config.mappings = mappings;
 
     config
 };
@@ -174,6 +175,13 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     println!("cr3: {:X}", cr3);
 
+    let pml4 = unsafe { memory::active_level_4_table(VirtAddr::new(P_OFFSET)) };
+    for i in 0..512 {
+        if !pml4[i].is_unused() {
+            println!("L4[{}] = {:?}", i, pml4[i]);
+        }
+    }
+
     setup_tasks(&mut mapper, frame_allocator)?;
 }
 
@@ -195,6 +203,7 @@ fn setup_tasks(
     });
 
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
+
     // main task starts here
     // # SAFETY: ps2_device_1_task calls schedule once per loop
     let ps2_task = Task::new(
@@ -203,6 +212,8 @@ fn setup_tasks(
         mapper,
         &mut frame_allocator,
     );
+
+    // panic!("testing");
 
     // # SAFETY: process_keys calls schedule once per loop
     let keys_task = Task::new(
@@ -301,6 +312,9 @@ fn task_2() -> ! {
         mapper.map_to(page, frame, flags, pmm);
     }
 
+    let p4_idx = (ADDR >> 39) & 0x1FF; // = 0 for 0x50
+    println!("task 2 L4[0] = {:?}", mapper.level_4_table()[p4_idx]);
+
     drop(guard);
 
     // let table_count = mapper
@@ -348,6 +362,9 @@ fn task_1() -> ! {
     unsafe {
         mapper.map_to(page, frame, flags, pmm);
     }
+
+    let p4_idx = (ADDR >> 39) & 0x1FF; // = 0 for 0x50
+    println!("task 2 L4[0] = {:?}", mapper.level_4_table()[p4_idx]);
 
     drop(guard);
 

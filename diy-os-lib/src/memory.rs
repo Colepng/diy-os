@@ -46,7 +46,7 @@ pub fn clone_addresss_space(
         for entry in table.iter() {
             let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) }; // lv2
             for entry in table.iter() {
-                let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) }
+                let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) };
             }
         }
     }
@@ -74,11 +74,17 @@ pub fn clone_addresss_space(
     // unsafe { OffsetPageTable::new(p4, offset) }
 }
 
-fn new_table(
+pub fn new_table(
     falloc: &mut impl FrameAllocator<Size4KiB>,
     offset: VirtAddr,
 ) -> (&'static mut PageTable, PhysFrame) {
-    alloc_table(falloc, offset, PageTable::new())
+    let current = unsafe { active_level_4_table(offset) };
+    let mut new = PageTable::new();
+    for i in 256..512 {
+        new[i] = current[i].clone();
+    }
+
+    alloc_table(falloc, offset, new)
 }
 
 pub fn alloc_table(

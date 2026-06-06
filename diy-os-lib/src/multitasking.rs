@@ -232,7 +232,11 @@ impl Task {
 
         info!("allocated new stack");
 
-        unsafe { Self::crate_new_task(common_name, task_fn, stack_page, frame_alloc) }
+        let temp = unsafe { Self::crate_new_task(common_name, task_fn, stack_page, frame_alloc) };
+
+        crate::println!("okay wtf is happening");
+
+        temp
     }
 
     pub fn allocate_task(
@@ -241,8 +245,7 @@ impl Task {
         stack: VirtAddr,
         frame_alloc: &mut impl FrameAllocator<Size4KiB>,
     ) -> Self {
-        let pml4 = unsafe { memory::active_level_4_table(VirtAddr::new(P_OFFSET)) };
-        let (_, frame) = memory::alloc_table(frame_alloc, VirtAddr::new(P_OFFSET), pml4.clone());
+        let (_, frame) = memory::new_table(frame_alloc, VirtAddr::new(P_OFFSET));
 
         Self {
             stack,
