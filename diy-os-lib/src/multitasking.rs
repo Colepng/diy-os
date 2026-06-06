@@ -10,7 +10,6 @@ use spinlock::Spinlock;
 use x86_64::instructions::interrupts::without_interrupts;
 use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
-use x86_64::{registers::control::Cr3, structures::paging::PhysFrame};
 
 // pub mod mutex;
 pub mod mutex {
@@ -21,7 +20,7 @@ pub mod mutex {
 // Setup some way to track used pages
 static STACK_COUNTER: Spinlock<u64> = Spinlock::new(0);
 
-const START_ADDR: VirtAddr = VirtAddr::new(0xffffc10000000000);
+const START_ADDR: VirtAddr = VirtAddr::new(0xFFFF_C100_0000_0000);
 
 pub static SCHEDULER: Spinlock<Scheduler> = Spinlock::new(Scheduler::new());
 

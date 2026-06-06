@@ -17,7 +17,7 @@ pub mod linked_list;
 static ALLOCATOR: Locked<FixedSizeBlockAllocator> = Locked::new(FixedSizeBlockAllocator::new());
 
 #[allow(fuzzy_provenance_casts)]
-pub const HEAP_START: usize = 0xffffc00000000000;
+pub const HEAP_START: usize = 0xFFFF_C000_0000_0000;
 pub const HEAP_SIZE: usize = 100 * 1024 * 1024; // 100 MiB 
 
 pub struct Dummy;

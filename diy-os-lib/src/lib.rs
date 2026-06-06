@@ -11,6 +11,7 @@
 #![feature(ascii_char)]
 #![feature(ascii_char_variants)]
 #![feature(int_from_ascii)]
+#![feature(ptr_as_uninit)]
 #![feature(test)] // clippy can't check if test is needed
 #![feature(slice_ptr_get)]
 #![feature(iter_array_chunks)]
@@ -47,7 +48,7 @@ pub mod syscalls;
 pub mod timer;
 pub mod usermode;
 
-pub const P_OFFSET: u64 = 0xffff800000000000;
+pub const P_OFFSET: u64 = 0xFFFF_8000_0000_0000;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RamdiskInfo {

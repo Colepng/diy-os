@@ -1,78 +1,12 @@
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use spinlock::Spinlock;
 use x86_64::registers::control::Cr3;
-use x86_64::structures::paging::page_table::PageTableEntry;
-use x86_64::structures::paging::{FrameDeallocator, PageTableFlags as Flags};
 use x86_64::{
     PhysAddr, VirtAddr,
     structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
 };
 
 pub static PMM: Spinlock<Option<BootInfoFrameAllocator>> = Spinlock::new(None);
-
-pub fn setup_virtual_memory_map(
-    falloc: &mut impl FrameAllocator<Size4KiB>,
-    offset: VirtAddr,
-) -> OffsetPageTable<'static> {
-    let flags = Flags::GLOBAL | Flags::PRESENT | Flags::WRITABLE;
-
-    let (p4, frame) = new_table(falloc, offset);
-
-    let (p3, frame) = new_table(falloc, offset);
-    let mut entry = PageTableEntry::new();
-    entry.set_frame(frame, flags);
-    p4[0] = entry;
-
-    let (p2, frame) = new_table(falloc, offset);
-    let mut entry = PageTableEntry::new();
-    entry.set_frame(frame, flags);
-    p3[0] = entry;
-
-    let (p1, frame) = new_table(falloc, offset);
-    let mut entry = PageTableEntry::new();
-    entry.set_frame(frame, flags);
-    p2[0] = entry;
-
-    unsafe { OffsetPageTable::new(p4, offset) }
-}
-
-pub fn clone_addresss_space(
-    falloc: &mut impl FrameAllocator<Size4KiB>,
-    offset: VirtAddr,
-    plm4: PageTable,
-) -> OffsetPageTable<'static> {
-    for entry in plm4.iter() {
-        let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) }; // lv3
-        for entry in table.iter() {
-            let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) }; // lv2
-            for entry in table.iter() {
-                let table = unsafe { core::mem::transmute::<&PageTableEntry, &PageTable>(entry) };
-            }
-        }
-    }
-
-    todo!()
-    // let flags = Flags::GLOBAL | Flags::PRESENT | Flags::WRITABLE;
-    //
-    // let (p4, frame) = new_table(falloc, offset);
-    //
-    // let (p3, frame) = new_table(falloc, offset);
-    // let mut entry = PageTableEntry::new();
-    // entry.set_frame(frame, flags);
-    // p4[0] = entry;
-    //
-    // let (p2, frame) = new_table(falloc, offset);
-    // let mut entry = PageTableEntry::new();
-    // entry.set_frame(frame, flags);
-    // p3[0] = entry;
-    //
-    // let (p1, frame) = new_table(falloc, offset);
-    // let mut entry = PageTableEntry::new();
-    // entry.set_frame(frame, flags);
-    // p2[0] = entry;
-    //
-    // unsafe { OffsetPageTable::new(p4, offset) }
-}
 
 pub fn new_table(
     falloc: &mut impl FrameAllocator<Size4KiB>,
@@ -87,6 +21,7 @@ pub fn new_table(
     alloc_table(falloc, offset, new)
 }
 
+#[allow(clippy::similar_names)]
 pub fn alloc_table(
     falloc: &mut impl FrameAllocator<Size4KiB>,
     offset: VirtAddr,
@@ -173,6 +108,6 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
     }
 }
 
-impl FrameDeallocator<Size4KiB> for BootInfoFrameAllocator {
-    unsafe fn deallocate_frame(&mut self, frame: PhysFrame<Size4KiB>) {}
-}
+// impl FrameDeallocator<Size4KiB> for BootInfoFrameAllocator {
+//     unsafe fn deallocate_frame(&mut self, _frame: PhysFrame<Size4KiB>) {}
+// }
