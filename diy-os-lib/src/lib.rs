@@ -47,6 +47,8 @@ pub mod syscalls;
 pub mod timer;
 pub mod usermode;
 
+pub const P_OFFSET: u64 = 0xffff800000000000;
+
 #[derive(Debug, Clone, Copy)]
 pub struct RamdiskInfo {
     pub addr: u64,

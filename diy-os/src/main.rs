@@ -17,16 +17,19 @@ use bootloader_api::{
     config::{Mapping, Mappings},
     entry_point,
 };
-use core::panic::PanicInfo;
+use core::{panic::PanicInfo, ptr};
 use diy_os::{
     device_manager::{self, BlockDevice},
     filesystem::{
         FileSystem, FileSystemSetupError, VFS,
         gpt::{self, PartionTableHeader, PartitionEntry},
     },
+    P_OFFSET, RamdiskInfo,
+    allocator::{HEAP_SIZE, HEAP_START},
     human_input_devices::{STDIN, process_keys},
     kernel_early,
     multitasking::{SCHEDULER, Task, mutex::Mutex, sleep},
+    memory::{self, BootInfoFrameAllocator, PMM},
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
@@ -38,14 +41,22 @@ use qemu_exit::QEMUExit;
 use refine::Refined;
 use refine::refine_const;
 use x86_64::{
-    VirtAddr,
-    structures::paging::{FrameAllocator, Mapper, Page, Size4KiB},
+    PhysAddr, VirtAddr,
+    registers::control::Cr3,
+    structures::paging::{
+        FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, PhysFrame, Size4KiB,
+        Translate, mapper::CleanUp,
+    },
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     let mut mappings = Mappings::new_default();
-    mappings.physical_memory = Some(Mapping::Dynamic);
+    mappings.physical_memory = Some(Mapping::FixedAddress(P_OFFSET));
+    // 64 TB mapping ends at 0xffffc00000000000 - 1
+    // another tb for continuous memory, for now only heap at 0xffffc00000000000
+    // another tb for quick and dirty stacks at 0xffffc10000000000
+    // the rest will be free to the virtual memory allacator
     config.mappings = mappings;
 
     config
@@ -61,20 +72,96 @@ extern "Rust" fn main_wrapper(boot_info: &'static mut BootInfo) -> ! {
     }
 }
 
+fn map_addr_range(
+    start_addr: u64,
+    end_addr: u64,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    flags: PageTableFlags,
+) {
+    for paddr in (start_addr..end_addr).step_by(ADDR) {
+        let vaddr = VirtAddr::new(0xffff800000000000 + paddr);
+        let pframe = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(paddr));
+        let page = Page::containing_address(vaddr);
+
+        unsafe {
+            mapper.map_to(page, pframe, flags, frame_allocator).unwrap();
+        }
+    }
+}
+
 // SAFETY: there is no other global function of this name
 #[unsafe(no_mangle)]
 extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
     let frequency = refine_const!(1000u32, PitFrequency);
     let (_boot_info, mut frame_allocator, mut mapper) = kernel_early(boot_info, frequency)?;
 
+    info!("kernel vaddr: {:X}", boot_info.kernel_image_offset);
+    info!("kernel size: {:X}", boot_info.kernel_len);
     info!("start_address {:X}", 0x0000_0000_0804_aff8);
     info!("start_address {:X}", 0x0000_0000_0804_aff8 + 4000 * 3);
-    info!("allocater start {:?}", diy_os::allocator::HEAP_START);
-    info!("allocater end {:?}", unsafe {
-        diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
-    });
+    // info!("allocater start {:?}", diy_os::allocator::HEAP_START);
+    // info!("allocater end {:?}", unsafe {
+    //     diy_os::allocator::HEAP_START.byte_add(diy_os::allocator::HEAP_SIZE)
+    // });
+    //
+    //
+    // what memory does the kernel need
+    // - code/binary
+    // - stack (handled by the tss)
+    // - heap for data structures
+    // - framebuffer for io
 
     println!("Hello, world!");
+    let mut level_4_page_table = Box::new(mapper.level_4_table().clone());
+    let map = unsafe {
+        OffsetPageTable::new(
+            level_4_page_table.as_mut(),
+            VirtAddr::new(0xffff800000000000),
+        )
+    };
+
+    // since the keneral only has ADDR00000 mem, map from addres 0 to 0x100000000
+    // let mut map = diy_os::memory::setup_virtual_memory_map(
+    //     &mut frame_allocator,
+    //     VirtAddr::new(boot_info.physical_memory_offset.into_option().unwrap()),
+    // );
+    //
+    // let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::GLOBAL;
+    //
+    // // map phyc memory at an offset
+    // map_addr_range(0x0, ADDR00000, &mut map, &mut frame_allocator, flags);
+    //
+    // // map kernel code to address space
+    // let kernel_paddr = boot_info.kernel_addr;
+    // let size = boot_info.kernel_len;
+    // let flags = PageTableFlags::PRESENT | PageTableFlags::GLOBAL;
+    //
+    // map_addr_range(
+    //     kernel_paddr,
+    //     kernel_paddr + size,
+    //     &mut map,
+    //     &mut frame_allocator,
+    //     flags,
+    // );
+    //
+    // // maps heap
+    // let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::GLOBAL;
+    // map_addr_range(
+    //     HEAP_START,
+    //     HEAP_START + HEAP_SIZE,
+    //     &mut map,
+    //     &mut frame_allocator,
+    //     flags,
+    // );
+    //
+    // // map framebuffer
+    //
+    // map_addr_range(start_addr, end_addr, mapper, frame_allocator, flags);
+
+    if let Some(addr) = boot_info.ramdisk_addr.into_option() {
+        info!("ramdisk start {addr:X}");
+        info!("ramdisk end {:X}", addr + boot_info.ramdisk_len);
 
     let device_manager = device_manager::init_device_manager()?;
 
@@ -83,53 +170,28 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     let fs = setup_filesystem(&device)?;
 
-    let mut vfs = VFS::new(fs);
+    let cr3 = Cr3::read().0.start_address().as_u64();
 
-    let file = vfs.open("/door/ads.txt").unwrap();
+    println!("cr3: {:X}", cr3);
 
-    let mut buf = [0u8; 100];
-
-    let _ = file.read(&mut buf).unwrap();
-
-    let text = str::from_utf8(&buf)?;
-
-    println!("text of a.txt: {text:?}");
-    //
-    // panic!("exit");
-
-    // for i in 0..=255 {
-    //     for j in 0..32 {
-    //         if let Some(dev_info) = diy_os::pci::get_info(i, j, 0) {
-    //             if dev_info.header_type.multi_func() {
-    //                 for k in 1..=7 {
-    //                     let device = diy_os::pci::get_info(i, j, k);
-    //                     println!("dev_info func {k}: {device:#X?}");
-    //                 }
-    //             }
-    //             println!("dev_info: {dev_info:#X?}");
-    //         }
-    //     }
-    // }
-
-    // let's just say we detected that bus 0 device 1 function 1 was the ide controller
-
-    setup_tasks(&mut mapper, &mut frame_allocator)?;
+    setup_tasks(&mut mapper, frame_allocator)?;
 }
 
 fn setup_tasks(
-    mapper: &mut impl Mapper<Size4KiB>,
-    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    mapper: &mut (impl Mapper<Size4KiB> + CleanUp),
+    mut frame_allocator: BootInfoFrameAllocator,
 ) -> anyhow::Result<!> {
     let current_stack = rsp();
     let current_task = Task::allocate_task(
         String::from("Main Task"),
         Page::<Size4KiB>::containing_address(VirtAddr::new(current_stack)).start_address() + 0x1000,
         VirtAddr::new(current_stack),
+        &mut frame_allocator,
     );
 
     SCHEDULER.with_mut_ref(|scheduler| {
         scheduler.set_first_task(current_task);
-        scheduler.setup_special_tasks(mapper, frame_allocator);
+        scheduler.setup_special_tasks(mapper, &mut frame_allocator);
     });
 
     TIME_KEEPER.with_mut_ref(|keeper| keeper.schedule_counter.time.reset());
@@ -139,7 +201,7 @@ fn setup_tasks(
         String::from("PS/2 Deivce 1 Task"),
         ps2_device_1_task,
         mapper,
-        frame_allocator,
+        &mut frame_allocator,
     );
 
     // # SAFETY: process_keys calls schedule once per loop
@@ -147,7 +209,7 @@ fn setup_tasks(
         String::from("Proccess keys"),
         process_keys,
         mapper,
-        frame_allocator,
+        &mut frame_allocator,
     );
 
     // # SAFETY: kernal_shell calle schedule once per loop
@@ -155,35 +217,165 @@ fn setup_tasks(
         String::from("Kernal Shell"),
         kernal_shell,
         mapper,
-        frame_allocator,
+        &mut frame_allocator,
     );
 
-    // let fat32_driver = Task::new(
-    //     String::from("fat32 driver"),
-    //     wrapper,
-    //     mapper,
-    //     frame_allocator,
-    // );
+    let task_1 = Task::new(String::from("Task 1"), task_1, mapper, &mut frame_allocator);
 
-    // let ide = Task::new(String::from("ide"), ide_task, mapper, frame_allocator);
+    let task_2 = Task::new(String::from("Task 2"), task_2, mapper, &mut frame_allocator);
+
+    unsafe { mapper.clean_up(&mut frame_allocator) };
+    PMM.with_mut_ref(|v| v.replace(frame_allocator));
 
     let (_ps2_task, _keys_task, _shell_task) = SCHEDULER.with_mut_ref(|scheduler| {
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
-        // let _ = scheduler.spawn_task(fat32_driver);
-        // let _ = scheduler.spawn_task(ide);
+        let _ = scheduler.spawn_task(task_1);
+        let _ = scheduler.spawn_task(task_2);
 
         (ps2_task, keys_task, shell_task)
     });
 
-    loop {
-        sleep(Seconds(1).into());
-        // debug!("Main task is still running properly");
+    {
+        // let mut mapper = unsafe { memory::init(VirtAddr::new(P_OFFSET)) };
+        //
+        // let page = Page::containing_address(VIRT_ADDR);
+        //
+        // let mut guard = PMM.acquire();
+        // let pmm = guard.as_mut().unwrap();
+        //
+        // let frame = pmm.allocate_frame().unwrap();
+        //
+        // let flags =
+        //     PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        //
+        // unsafe {
+        //     mapper.map_to(page, frame, flags, pmm);
+        // }
+        //
+        // drop(guard);
+        //
+        // let ptr: *mut u8 = ptr::with_exposed_provenance_mut(ADDR);
+        //
+        // unsafe { ptr.write(69) };
+
+        loop {
+            sleep(Seconds(1).into());
+
+            // println!("{}", unsafe { ptr.read() });
+            // let cr3 = Cr3::read().0.start_address().as_u64();
+            //
+            // println!("cr3: {:X}", cr3);
+
+            // debug!("Main task is still running properly");
+        }
     }
 }
 
-// fn testing_task() -> ! {}
+const ADDR: usize = 0x050;
+const VIRT_ADDR: VirtAddr = VirtAddr::new(ADDR as u64);
+
+fn task_2() -> ! {
+    let mut mapper = unsafe { memory::init(VirtAddr::new(P_OFFSET)) };
+
+    let page = Page::containing_address(VIRT_ADDR);
+
+    let mut guard = PMM.acquire();
+    let pmm = guard.as_mut().unwrap();
+
+    let frame = pmm.allocate_frame().unwrap();
+    let frame = pmm.allocate_frame().unwrap();
+    let frame = pmm.allocate_frame().unwrap();
+    println!("frame: {frame:?}");
+
+    let flags = PageTableFlags::WRITABLE | PageTableFlags::PRESENT;
+
+    mapper
+        .level_4_table_mut()
+        .iter_mut()
+        .find(|x| x.is_unused())
+        .unwrap();
+
+    unsafe {
+        mapper.map_to(page, frame, flags, pmm);
+    }
+
+    drop(guard);
+
+    // let table_count = mapper
+    //     .level_4_table()
+    //     .iter()
+    //     .filter(|x| !x.is_unused())
+    //     .for_each(|entry| {
+    //         println!("task 1 {:#?}", entry);
+    //     });
+
+    // println!("table: count {table_count}");
+
+    let ptr: *mut u8 = ptr::with_exposed_provenance_mut(ADDR);
+
+    let addr = mapper.translate_addr(VirtAddr::new(ADDR as u64));
+    println!("physc addr: {addr:?}");
+
+    unsafe { ptr.write(69) };
+    loop {
+        sleep(Seconds(1).into());
+
+        println!("task: 1");
+        println!("{}", unsafe { ptr.read_volatile() });
+        let cr3 = Cr3::read().0.start_address().as_u64();
+
+        println!("cr3: {:X}", cr3);
+        print!("\n");
+    }
+}
+
+fn task_1() -> ! {
+    let mut mapper = unsafe { memory::init(VirtAddr::new(P_OFFSET)) };
+
+    let page = Page::containing_address(VIRT_ADDR);
+
+    let mut guard = PMM.acquire();
+    let pmm = guard.as_mut().unwrap();
+
+    let frame = pmm.allocate_frame().unwrap();
+    println!("frame: {frame:?}");
+
+    let flags =
+        PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+
+    unsafe {
+        mapper.map_to(page, frame, flags, pmm);
+    }
+
+    drop(guard);
+
+    let addr = mapper.translate_addr(VIRT_ADDR);
+    println!("physc addr: {addr:?}");
+
+    // let table_count = mapper
+    //     .level_4_table()
+    //     .iter()
+    //     .filter(|x| !x.is_unused())
+    //     .for_each(|entry| {
+    //         println!("task 2 {:#?}", entry);
+    //     });
+
+    let ptr: *mut u8 = ptr::with_exposed_provenance_mut(ADDR);
+
+    unsafe { ptr.write(67) };
+    loop {
+        sleep(Seconds(1).into());
+
+        println!("task: 2");
+        println!("{}", unsafe { ptr.read_volatile() });
+        let cr3 = Cr3::read().0.start_address().as_u64();
+
+        println!("cr3: {:X}", cr3);
+        print!("\n");
+    }
+}
 
 fn kernal_shell() -> ! {
     let mut input = String::new();
