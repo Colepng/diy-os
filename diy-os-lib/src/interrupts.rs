@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spinlock::Spinlock;
 use x86_64::{
-    VirtAddr, set_general_handler,
+    set_general_handler,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
 
@@ -11,7 +11,6 @@ use crate::{
     multitasking::{SCHEDULER, Scheduler, schedule},
     println,
     ps2::controller::{InitalTrait, ReadyToReadTrait, WaitingToReadTrait},
-    syscalls,
     timer::{TIME_KEEPER, TimeKeeper},
 };
 
@@ -42,14 +41,6 @@ lazy_static! {
             idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
             idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
             idt[InterruptIndex::Suprious.as_u8()].set_handler_fn(spurious_handler);
-            idt[0x80]
-                .set_handler_addr(VirtAddr::new(
-                    (syscalls::system_call_handler_wrapper as *const () as usize)
-                        .try_into()
-                        .unwrap(),
-                ))
-                .set_privilege_level(x86_64::PrivilegeLevel::Ring3)
-                .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
         idt
     };
