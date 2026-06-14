@@ -66,14 +66,10 @@ phdr:
 
 _start:
     mov rax, 1
-    mov rdx, 35
-    mov rsi, 30
-    int 0x80
-    push rax
-    mov rax, 0
-    mov rsi, rsp
-    mov rdx, 1
-    int 0x80
+    mov rdi, 0xdead
+    mov rsi, 0xbeef
+    syscall
+    jmp _start
 
 
     filesize    equ     $ - $$

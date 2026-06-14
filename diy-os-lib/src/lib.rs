@@ -15,6 +15,7 @@
 #![feature(test)] // clippy can't check if test is needed
 #![feature(slice_ptr_get)]
 #![feature(iter_array_chunks)]
+#![feature(pointer_is_aligned_to)]
 #![deny(fuzzy_provenance_casts)]
 
 use bootloader_api::BootInfo;
@@ -89,7 +90,7 @@ pub fn kernel_early(
     // setup the heap
     let mut frame_allocator =
         unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
-    let mut mapper = unsafe { memory::init(offset_addr) };
+    let mut mapper = unsafe { memory::init(offset_addr, &mut frame_allocator) };
     #[cfg(not(test))]
     allocator::setup_heap(&mut mapper, &mut frame_allocator)
         .map_err(InitError::FailedToSetupHeap)?;

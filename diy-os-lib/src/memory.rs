@@ -1,6 +1,7 @@
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use spinlock::Spinlock;
 use x86_64::registers::control::Cr3;
+use x86_64::structures::paging::PageTableFlags;
 use x86_64::{
     PhysAddr, VirtAddr,
     structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
@@ -41,9 +42,27 @@ pub fn alloc_table(
 ///
 /// # Safety
 /// The caller must guarantee that the `physical_memory_offset` is correct.
-pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
+pub unsafe fn init(
+    physical_memory_offset: VirtAddr,
+    frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+) -> OffsetPageTable<'static> {
     unsafe {
         let level_4_table = active_level_4_table(physical_memory_offset);
+
+        for i in 256..512 {
+            if level_4_table[i].is_unused() {
+                let frame = frame_alloc.allocate_frame().unwrap();
+                // zero the frame
+
+                let pdpt_vaddr = physical_memory_offset + frame.start_address().as_u64();
+                (pdpt_vaddr.as_mut_ptr::<PageTable>()).write(PageTable::new());
+
+                level_4_table[i].set_addr(
+                    frame.start_address(),
+                    PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+                );
+            }
+        }
 
         OffsetPageTable::new(level_4_table, physical_memory_offset)
     }

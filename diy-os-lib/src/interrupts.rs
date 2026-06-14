@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spinlock::Spinlock;
 use x86_64::{
+    registers::control::Cr2,
     set_general_handler,
     structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode},
 };
@@ -88,8 +89,10 @@ extern "x86-interrupt" fn page_fault_handler(
     error_code: PageFaultErrorCode,
 ) {
     panic!(
-        "EXCEPTION: page fault\n{:#?}, \nerror code {:?}",
-        stack_frame, error_code
+        "EXCEPTION: page fault\n{:#?}, \nerror code {:?}\ncr2: {:?}",
+        stack_frame,
+        error_code,
+        Cr2::read(),
     );
 }
 

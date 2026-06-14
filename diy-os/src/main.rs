@@ -13,21 +13,22 @@ extern crate alloc;
 
 use alloc::{boxed::Box, string::String, sync::Arc};
 use bootloader_api::{BootInfo, BootloaderConfig, config::Mapping, entry_point};
-use core::{panic::PanicInfo, ptr};
+use core::panic::PanicInfo;
 use diy_os::{
     P_OFFSET,
-    device_manager::BlockDevice,
+    device_manager::{BlockDevice, init_device_manager},
     filesystem::{
-        FileSystem, FileSystemSetupError,
+        FileSystem, FileSystemSetupError, VFS,
         gpt::{self, PartionTableHeader, PartitionEntry},
     },
     human_input_devices::{STDIN, process_keys},
     kernel_early,
-    memory::{self, BootInfoFrameAllocator, PMM},
+    memory::{BootInfoFrameAllocator, PMM},
     multitasking::{SCHEDULER, Task, mutex::Mutex, sleep},
     pit::PitFrequency,
     print, println,
     ps2::devices::ps2_device_1_task,
+    syscalls::init_syscalls,
     timer::{Duration, Miliseconds, Seconds, TIME_KEEPER},
 };
 use fat16_read_only::fat_setup;
@@ -37,10 +38,7 @@ use refine::Refined;
 use refine::refine_const;
 use x86_64::{
     VirtAddr,
-    registers::control::Cr3,
-    structures::paging::{
-        FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, Translate, mapper::CleanUp,
-    },
+    structures::paging::{Mapper, Page, Size4KiB, mapper::CleanUp},
 };
 
 static BOOTLOADER_CONFIG: BootloaderConfig = {
@@ -78,9 +76,7 @@ extern "Rust" fn main(boot_info: &'static mut BootInfo) -> anyhow::Result<!> {
 
     println!("Hello, world!");
 
-    let cr3 = Cr3::read().0.start_address().as_u64();
-
-    println!("cr3: {:X}", cr3);
+    init_syscalls();
 
     setup_tasks(&mut mapper, frame_allocator)?;
 }
@@ -106,9 +102,9 @@ fn setup_tasks(
 
     // main task starts here
     // # SAFETY: ps2_device_1_task calls schedule once per loop
-    let ps2_task = Task::new(
+    let ps2_task = Task::new_kernel(
         String::from("PS/2 Deivce 1 Task"),
-        ps2_device_1_task,
+        ps2_device_1_task as *const () as u64,
         mapper,
         &mut frame_allocator,
     );
@@ -116,24 +112,36 @@ fn setup_tasks(
     // panic!("testing");
 
     // # SAFETY: process_keys calls schedule once per loop
-    let keys_task = Task::new(
+    let keys_task = Task::new_kernel(
         String::from("Proccess keys"),
-        process_keys,
+        process_keys as *const () as u64,
         mapper,
         &mut frame_allocator,
     );
 
     // # SAFETY: kernal_shell calle schedule once per loop
-    let shell_task = Task::new(
+    let shell_task = Task::new_kernel(
         String::from("Kernal Shell"),
-        kernal_shell,
+        kernal_shell as *const () as u64,
         mapper,
         &mut frame_allocator,
     );
 
-    let task_1 = Task::new(String::from("Task 1"), task_1, mapper, &mut frame_allocator);
+    let dm = init_device_manager().unwrap();
 
-    let task_2 = Task::new(String::from("Task 2"), task_2, mapper, &mut frame_allocator);
+    let fs = setup_filesystem(&dm.block_devices[1]).unwrap();
+    let mut vfs = VFS::new(fs);
+
+    let elf = vfs.open("/hello_world").unwrap();
+
+    init_syscalls();
+
+    let user_task = Task::new_usermode(
+        &*elf,
+        mapper,
+        String::from("user task"),
+        &mut frame_allocator,
+    );
 
     // unsafe { mapper.clean_up(&mut frame_allocator) };
     PMM.with_mut_ref(|v| v.replace(frame_allocator));
@@ -142,8 +150,7 @@ fn setup_tasks(
         let ps2_task = scheduler.spawn_task(ps2_task);
         let keys_task = scheduler.spawn_task(keys_task);
         let shell_task = scheduler.spawn_task(shell_task);
-        let _ = scheduler.spawn_task(task_1);
-        let _ = scheduler.spawn_task(task_2);
+        let _ = scheduler.spawn_task(user_task);
 
         (ps2_task, keys_task, shell_task)
     });
@@ -154,90 +161,6 @@ fn setup_tasks(
 
             // debug!("Main task is still running properly");
         }
-    }
-}
-
-const ADDR: usize = 0x050;
-const VIRT_ADDR: VirtAddr = VirtAddr::new(ADDR as u64);
-
-fn task_2() -> ! {
-    let mut mapper = unsafe { memory::init(VirtAddr::new(P_OFFSET)) };
-
-    let page = Page::containing_address(VIRT_ADDR);
-
-    let mut guard = PMM.acquire();
-    let pmm = guard.as_mut().unwrap();
-
-    let frame = pmm.allocate_frame().unwrap();
-    println!("frame: {frame:?}");
-
-    let flags = PageTableFlags::WRITABLE | PageTableFlags::PRESENT;
-
-    mapper
-        .level_4_table_mut()
-        .iter_mut()
-        .find(|x| x.is_unused())
-        .unwrap();
-
-    unsafe {
-        let _ = mapper.map_to(page, frame, flags, pmm).unwrap();
-    }
-
-    drop(guard);
-
-    let ptr: *mut u8 = ptr::with_exposed_provenance_mut(ADDR);
-
-    let addr = mapper.translate_addr(VirtAddr::new(ADDR as u64));
-    println!("physc addr: {addr:?}");
-
-    unsafe { ptr.write(69) };
-    loop {
-        sleep(Seconds(1).into());
-
-        println!("task: 1");
-        println!("{}", unsafe { ptr.read_volatile() });
-        let cr3 = Cr3::read().0.start_address().as_u64();
-
-        println!("cr3: {:X}", cr3);
-        print!("\n");
-    }
-}
-
-fn task_1() -> ! {
-    let mut mapper = unsafe { memory::init(VirtAddr::new(P_OFFSET)) };
-
-    let page = Page::containing_address(VIRT_ADDR);
-
-    let mut guard = PMM.acquire();
-    let pmm = guard.as_mut().unwrap();
-
-    let frame = pmm.allocate_frame().unwrap();
-    println!("frame: {frame:?}");
-
-    let flags =
-        PageTableFlags::WRITABLE | PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
-
-    unsafe {
-        let _ = mapper.map_to(page, frame, flags, pmm).unwrap();
-    }
-
-    drop(guard);
-
-    let addr = mapper.translate_addr(VIRT_ADDR);
-    println!("physc addr: {addr:?}");
-
-    let ptr: *mut u8 = ptr::with_exposed_provenance_mut(ADDR);
-
-    unsafe { ptr.write(67) };
-    loop {
-        sleep(Seconds(1).into());
-
-        println!("task: 2");
-        println!("{}", unsafe { ptr.read_volatile() });
-        let cr3 = Cr3::read().0.start_address().as_u64();
-
-        println!("cr3: {:X}", cr3);
-        print!("\n");
     }
 }
 
@@ -396,7 +319,7 @@ pub fn setup_filesystem(
 }
 
 /// This function is called on panic.
-#[cfg(not(test))] // new attribute
+// #[cfg(not(test))] // new attribute
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     use diy_os::framebuffer;

@@ -1,5 +1,7 @@
+use crate::filesystem::FileTrait;
 use crate::gdt::TSS;
 use crate::timer::{Duration, Miliseconds, TIME_KEEPER, TimeKeeper};
+use crate::usermode::{into_usermode, load_elf};
 use crate::{P_OFFSET, hlt_loop, memory};
 use alloc::collections::linked_list::LinkedList;
 use alloc::string::String;
@@ -8,7 +10,9 @@ use alloc::vec::Vec;
 use log::{debug, info};
 use spinlock::Spinlock;
 use x86_64::instructions::interrupts::without_interrupts;
-use x86_64::structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB};
+use x86_64::structures::paging::{
+    FrameAllocator, Mapper, OffsetPageTable, Page, PageTableFlags, Size4KiB,
+};
 use x86_64::{PhysAddr, VirtAddr};
 
 // pub mod mutex;
@@ -20,7 +24,9 @@ pub mod mutex {
 // Setup some way to track used pages
 static STACK_COUNTER: Spinlock<u64> = Spinlock::new(0);
 
-const START_ADDR: VirtAddr = VirtAddr::new(0xFFFF_C100_0000_0000);
+static KERNEL_STACK: Spinlock<VirtAddr> = Spinlock::new(VirtAddr::new(0xFFFF_E000_0000_0000));
+
+static USER_STACK: Spinlock<VirtAddr> = Spinlock::new(VirtAddr::new(0x0000_0000_F000_0000));
 
 pub static SCHEDULER: Spinlock<Scheduler> = Spinlock::new(Scheduler::new());
 
@@ -63,8 +69,18 @@ impl Scheduler {
         mapper: &mut impl Mapper<Size4KiB>,
         frame_alloc: &mut impl FrameAllocator<Size4KiB>,
     ) {
-        let cleaner_task = Task::new(String::from("Cleaner"), cleaner_task, mapper, frame_alloc);
-        let idle_task = Task::new(String::from("idle"), idle_task, mapper, frame_alloc);
+        let cleaner_task = Task::new_kernel(
+            String::from("Cleaner"),
+            cleaner_task as *const () as u64,
+            mapper,
+            frame_alloc,
+        );
+        let idle_task = Task::new_kernel(
+            String::from("idle"),
+            idle_task as *const () as u64,
+            mapper,
+            frame_alloc,
+        );
 
         self.spawn_task(cleaner_task);
         self.spawn_task(idle_task);
@@ -193,14 +209,16 @@ pub struct Registers {
 #[derive(Debug)]
 #[repr(C)]
 pub struct Task {
-    pub stack: VirtAddr,     // rsp
-    pub stack_top: VirtAddr, //rbp
+    pub kernel_stack: VirtAddr,     // rsp
+    pub kernel_stack_top: VirtAddr, //rbp
     registers: Registers,
     pub cr3_paddr: PhysAddr,
     pub time_used: Duration,
     pub common_name: String,
     pub state: State,
     pub id: TaskID,
+    user_stack_top: Option<VirtAddr>,
+    entry: Option<u64>,
 }
 
 unsafe impl Send for Task {}
@@ -212,43 +230,38 @@ pub enum TaskBuildError {
 }
 
 impl Task {
-    /// Allocates and insets a new task the linked list
-    pub fn new(
+    pub fn new_usermode(
+        file: &dyn FileTrait,
+        kernel_mapper: &mut impl Mapper<Size4KiB>,
         common_name: String,
-        task_fn: fn() -> !,
-        mapper: &mut impl Mapper<Size4KiB>,
         frame_alloc: &mut impl FrameAllocator<Size4KiB>,
     ) -> Self {
-        let num_of_stacks = STACK_COUNTER.with_mut_ref(|counter| {
-            let temp = *counter;
-            *counter += 1;
-            temp
-        });
+        let (page, frame) = memory::new_table(frame_alloc, VirtAddr::new(P_OFFSET));
 
-        let addr = START_ADDR + 0x1000 * num_of_stacks;
+        let mut mapper = unsafe { OffsetPageTable::new(page, VirtAddr::new(P_OFFSET)) };
 
-        let stack_page = unsafe { allocate_stack(addr, mapper, frame_alloc) };
+        let entry = load_elf(file, &mut mapper, frame_alloc).unwrap();
 
-        info!("allocated new stack");
+        let kernel_stack = allocate_kernel_stack(kernel_mapper, frame_alloc);
 
-        let temp = unsafe { Self::crate_new_task(common_name, task_fn, stack_page, frame_alloc) };
+        let user_stack = allocate_user_stack(&mut mapper, frame_alloc);
 
-        crate::println!("okay wtf is happening");
+        let end_of_stack_addr = kernel_stack[3].start_address() + 0x1000;
+        let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
 
-        temp
-    }
-
-    pub fn allocate_task(
-        common_name: String,
-        top_of_stack: VirtAddr,
-        stack: VirtAddr,
-        frame_alloc: &mut impl FrameAllocator<Size4KiB>,
-    ) -> Self {
-        let (_, frame) = memory::new_table(frame_alloc, VirtAddr::new(P_OFFSET));
+        // Setup the new stack
+        unsafe {
+            stack_ptr = stack_ptr.sub(1);
+            *stack_ptr = entry;
+            stack_ptr = stack_ptr.sub(1);
+            *stack_ptr = first_time_task_cleanup as *const () as u64;
+        }
 
         Self {
-            stack,
-            stack_top: top_of_stack,
+            kernel_stack: end_of_stack_addr - (8 * 2),
+            kernel_stack_top: end_of_stack_addr,
+            user_stack_top: Some(user_stack[3].start_address() + 0x1000),
+            entry: Some(entry),
             registers: Registers {
                 rbx: 0,
                 r12: 0,
@@ -265,34 +278,73 @@ impl Task {
     }
 
     /// Allocates and insets a new task the linked list
-    ///
-    /// # Safety
-    /// Callers must insure that the stack page is unused
-    unsafe fn crate_new_task(
+    pub fn new_kernel(
         common_name: String,
-        new_task: fn() -> !,
-        stack_page: Page<Size4KiB>,
+        task_fn: u64,
+        mapper: &mut impl Mapper<Size4KiB>,
         frame_alloc: &mut impl FrameAllocator<Size4KiB>,
     ) -> Self {
-        let end_of_stack_addr = stack_page.start_address() + 0x1000;
-        let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
+        let (_, frame) = memory::new_table(frame_alloc, VirtAddr::new(P_OFFSET));
 
-        let task = Self::allocate_task(
-            common_name,
-            end_of_stack_addr,
-            end_of_stack_addr - (8 * 2),
-            frame_alloc,
-        );
+        let kernel_stack = allocate_kernel_stack(mapper, frame_alloc);
+
+        let end_of_stack_addr = kernel_stack[3].start_address() + 0x1000;
+        let mut stack_ptr: *mut u64 = end_of_stack_addr.as_mut_ptr();
 
         // Setup the new stack
         unsafe {
             stack_ptr = stack_ptr.sub(1);
-            *stack_ptr = new_task as u64;
+            *stack_ptr = task_fn;
             stack_ptr = stack_ptr.sub(1);
             *stack_ptr = first_time_task_cleanup as *const () as u64;
         }
 
-        task
+        Self {
+            kernel_stack: end_of_stack_addr - (8 * 2),
+            kernel_stack_top: end_of_stack_addr,
+            user_stack_top: None,
+            entry: None,
+            registers: Registers {
+                rbx: 0,
+                r12: 0,
+                r13: 0,
+                r14: 0,
+                r15: 0,
+            },
+            cr3_paddr: frame.start_address(),
+            time_used: Duration::new(),
+            common_name,
+            state: State::ReadyToRun,
+            id: TaskID(*STACK_COUNTER.acquire()),
+        }
+    }
+
+    pub fn allocate_task(
+        common_name: String,
+        top_of_stack: VirtAddr,
+        kernel_stack: VirtAddr,
+        frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+    ) -> Self {
+        let (_, frame) = memory::new_table(frame_alloc, VirtAddr::new(P_OFFSET));
+
+        Self {
+            kernel_stack,
+            kernel_stack_top: top_of_stack,
+            user_stack_top: None,
+            entry: None,
+            registers: Registers {
+                rbx: 0,
+                r12: 0,
+                r13: 0,
+                r14: 0,
+                r15: 0,
+            },
+            cr3_paddr: frame.start_address(),
+            time_used: Duration::new(),
+            common_name,
+            state: State::ReadyToRun,
+            id: TaskID(*STACK_COUNTER.acquire()),
+        }
     }
 
     fn print(&self) {
@@ -302,6 +354,66 @@ impl Task {
         let time_used = &self.time_used;
         crate::println!("\tname: {name}\n\tid: {id:?}\n\tstate:{state:?}\n\ttime used:{time_used}");
     }
+}
+
+fn allocate_user_stack(
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+) -> [Page<Size4KiB>; 4] {
+    let mut addr = USER_STACK.acquire();
+
+    let flags =
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+
+    allocate_stack_with_flags(mapper, frame_alloc, flags, &mut addr)
+}
+
+fn allocate_kernel_stack(
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+) -> [Page<Size4KiB>; 4] {
+    let mut addr = KERNEL_STACK.acquire();
+
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+
+    allocate_stack_with_flags(mapper, frame_alloc, flags, &mut addr)
+}
+
+fn allocate_stack_with_flags(
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_alloc: &mut impl FrameAllocator<Size4KiB>,
+    flags: PageTableFlags,
+    addr: &mut VirtAddr,
+) -> [Page<Size4KiB>; 4] {
+    let pages: [Page<Size4KiB>; 4] = [
+        kernel_stack_page(addr),
+        kernel_stack_page(addr),
+        kernel_stack_page(addr),
+        kernel_stack_page(addr),
+    ];
+
+    // gaurd page
+    let _ = kernel_stack_page(addr);
+
+    for page in &pages {
+        let frame = frame_alloc.allocate_frame().unwrap();
+        unsafe {
+            mapper
+                .map_to(*page, frame, flags, frame_alloc)
+                .unwrap()
+                .ignore();
+        }
+    }
+
+    pages
+}
+
+fn kernel_stack_page(addr: &mut VirtAddr) -> Page<Size4KiB> {
+    let page = Page::from_start_address(*addr).unwrap();
+
+    *addr += 0x1000;
+
+    page
 }
 
 /// Allocates and Maps page frame for stack
@@ -344,7 +456,10 @@ pub unsafe fn switch_to_task(current_task: Arc<Spinlock<Task>>, next_task: Arc<S
     let current_task_ptr = current_task.with_mut_ref(core::ptr::from_mut);
 
     let next_task_ptr = next_task.with_mut_ref(|task| {
-        (unsafe { TSS.privilege_stack_table })[0] = task.stack_top;
+        unsafe {
+            TSS.privilege_stack_table[0] = task.kernel_stack_top;
+            crate::syscalls::KERNEL_RSP.1 = task.kernel_stack_top.as_u64();
+        }
 
         core::ptr::from_mut(task)
     });
@@ -395,6 +510,20 @@ pub unsafe extern "sysv64" fn switch_to_task_inner(current_task: *mut Task, next
 fn first_time_task_cleanup() {
     x86_64::instructions::interrupts::enable();
     SCHEDULER.release();
+
+    let sched = SCHEDULER.acquire();
+
+    let current = sched.current_task.as_ref().unwrap();
+
+    #[allow(clippy::branches_sharing_code)]
+    if let Some((entry, stack)) = current.with_ref(|task| task.entry.zip(task.user_stack_top)) {
+        drop(sched);
+        unsafe {
+            into_usermode(entry, stack.as_u64());
+        }
+    } else {
+        drop(sched);
+    }
 }
 
 fn get_time_elapsed() -> Duration {

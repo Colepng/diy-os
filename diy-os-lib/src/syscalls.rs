@@ -12,7 +12,7 @@ use x86_64::registers::rflags::RFlags;
 use crate::gdt::GDT;
 use core::arch::naked_asm;
 
-static mut KERNEL_RSP: (u64, u64) = (0, 0);
+pub static mut KERNEL_RSP: (u64, u64) = (0, 0);
 
 pub fn init_syscalls() {
     unsafe {
